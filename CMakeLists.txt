@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # set(URHO3D_HOME /home/USERNAME/apps/U3D)
 include(UrhoCommon)
 # find_package (Urho3D REQUIRED) # NOTE: done implicitly by the above inclusion
+find_package(assimp REQUIRED)
 
 include_directories(
     ${URHO3D_INCLUDE_DIRS}
@@ -19,8 +20,11 @@ set(TARGET_NAME ${PROJECT_NAME})
 
 # NOTE: cannot use Urho3D's define_source_files() macro, as it looks for *.cpp and *.h in the current directory, not the "src/" directory!
 set(SOURCE_FILES
+    src/SceneLoader.cpp
     src/main.cpp
 )
+
+set(ABSOLUTE_PATH_LIBS ${ASSIMP_LIBRARIES})
 
 # Urho3D specific resource embedding step
 setup_main_executable()
