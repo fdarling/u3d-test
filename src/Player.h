@@ -20,9 +20,19 @@ class Player : public Urho3D::Object
 public:
     Player(Urho3D::Scene *scene, const Urho3D::Vector3 &pos);
     ~Player();
+
+    void Advance();
+    void SetWalkDirection(const Urho3D::Vector3 &dir);
+    void SetJumping(bool en);
+    bool IsOnGround() const {return onGround_;}
 protected:
     void HandleNodeCollision(Urho3D::StringHash eventType, Urho3D::VariantMap &eventData);
 
-    Urho3D::Node *node_;
     static Urho3D::SharedPtr<Urho3D::Model> cylinderModel_;
+
+    Urho3D::Node *node_;
+    Urho3D::Vector3 walkDir_;
+    bool onLadder_;
+    bool onGround_;
+    bool wantJump_;
 };

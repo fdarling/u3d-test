@@ -99,7 +99,7 @@ public:
         loadSceneWithAssimp("../assets/test_scene_torus.glb", scene_, context_);
 
         // TODO store pointers, we are leaking these object currently!
-        Player * const player = new Player(scene_, Vector3(6, PLAYER_HEIGHT/2.0+0.01, 0));
+        player_ = new Player(scene_, Vector3(6, PLAYER_HEIGHT/2.0+0.01, 0));
         JumpPad * const jumpPad = new JumpPad(scene_, Vector3(2.0, 0.25, 0.0), Vector3(2.0, 0.5, 2.0));
         Ladder * const ladder = new Ladder(scene_, Vector3(4.0, 8.0, 4.0), Vector3(2.0, 16.0, 2.0));
 
@@ -165,12 +165,34 @@ public:
         Input * const input = GetSubsystem<Input>();
 
         // camera movement
-        if (input->GetKeyDown(KEY_W)) cameraNode_->Translate(Vector3::FORWARD * walkDistance);
-        if (input->GetKeyDown(KEY_S)) cameraNode_->Translate(Vector3::BACK * walkDistance);
-        if (input->GetKeyDown(KEY_A)) cameraNode_->Translate(Vector3::LEFT * walkDistance);
-        if (input->GetKeyDown(KEY_D)) cameraNode_->Translate(Vector3::RIGHT * walkDistance);
+        Vector3 cameraMoveDir(Vector3::ZERO);
+        if ( input->GetKeyDown(KEY_W) && !input->GetKeyDown(KEY_S))
+            cameraMoveDir += Vector3::FORWARD;
+        if (!input->GetKeyDown(KEY_W) &&  input->GetKeyDown(KEY_S))
+            cameraMoveDir += Vector3::BACK;
+        if ( input->GetKeyDown(KEY_A) && !input->GetKeyDown(KEY_D))
+            cameraMoveDir += Vector3::LEFT;
+        if (!input->GetKeyDown(KEY_A) &&  input->GetKeyDown(KEY_D))
+            cameraMoveDir += Vector3::RIGHT;
+        if ( input->GetKeyDown(KEY_LCTRL) && !input->GetKeyDown(KEY_SPACE))
+            cameraMoveDir += Vector3::DOWN;
+        if (!input->GetKeyDown(KEY_LCTRL) &&  input->GetKeyDown(KEY_SPACE))
+            cameraMoveDir += Vector3::UP;
+        if (cameraMoveDir != Vector3::ZERO)
+            cameraNode_->Translate(cameraMoveDir.Normalized()*walkDistance);
 
-        // TODO player movement
+        // player movement
+        Vector3 playerMoveDir(Vector3::ZERO);
+        if ( input->GetKeyDown(KEY_I) && !input->GetKeyDown(KEY_K))
+            playerMoveDir += Vector3::FORWARD;
+        if (!input->GetKeyDown(KEY_I) &&  input->GetKeyDown(KEY_K))
+            playerMoveDir += Vector3::BACK;
+        if ( input->GetKeyDown(KEY_J) && !input->GetKeyDown(KEY_L))
+            playerMoveDir += Vector3::LEFT;
+        if (!input->GetKeyDown(KEY_J) &&  input->GetKeyDown(KEY_L))
+            playerMoveDir += Vector3::RIGHT;
+        player_->SetWalkDirection(playerMoveDir.Normalized());
+        player_->SetJumping(input->GetKeyDown(KEY_RSHIFT));
 
         // toggle graphics debug rendering
         if (input->GetKeyPress(KEY_Z))
@@ -181,7 +203,7 @@ public:
             camera_->SetFillMode(camera_->GetFillMode() == FILL_WIREFRAME ? FILL_SOLID : FILL_WIREFRAME);
 
         // toggle debug drawing
-        if (input->GetKeyPress(KEY_SPACE))
+        if (input->GetKeyPress(KEY_C))
             drawPhysicsDebug_ = !drawPhysicsDebug_;
 
         // toggle mouse grabbing / mouselook
@@ -191,6 +213,9 @@ public:
             input->SetMouseMode(wasRelative ? MM_ABSOLUTE : MM_RELATIVE);
             input->SetMouseVisible(wasRelative);
         }
+
+        // player state advancement
+        player_->Advance();
 
         // shoot sphere on left mouse click
         if (input->GetMouseButtonPress(MOUSEB_LEFT))
@@ -234,6 +259,7 @@ private:
     SharedPtr<Octree> octree_;
     SharedPtr<Zone> zone_;
     SharedPtr<Camera> camera_;
+    SharedPtr<Player> player_;
     float yaw_;
     float pitch_;
     bool drawDebug_;
