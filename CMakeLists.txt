@@ -20,7 +20,13 @@ set(TARGET_NAME ${PROJECT_NAME})
 
 # NOTE: cannot use Urho3D's define_source_files() macro, as it looks for *.cpp and *.h in the current directory, not the "src/" directory!
 set(SOURCE_FILES
+    src/CreateMaterial.cpp
+    src/CreatePrimitives.cpp
     src/SceneLoader.cpp
+    src/Player.cpp
+    src/JumpPad.cpp
+    src/Ladder.cpp
+    src/Ball.cpp
     src/main.cpp
 )
 
