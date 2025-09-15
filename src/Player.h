@@ -14,6 +14,9 @@ class StringHash;
 
 } // namespace Urho3D
 
+// forward declaration
+class Ladder;
+
 class Player : public Urho3D::Object
 {
     URHO3D_OBJECT(Player, Urho3D::Object);
@@ -24,17 +27,21 @@ public:
     void Advance();
     void SetWalkDirection(const Urho3D::Vector3 &dir);
     void SetJumping(bool en);
+    bool IsOnLadder() const {return ladder_;}
     bool IsOnGround() const {return onGround_;}
     Urho3D::Node * GetNode() {return node_;}
     const Urho3D::Node * GetNode() const {return node_;}
 protected:
     void HandleNodeCollision(Urho3D::StringHash eventType, Urho3D::VariantMap &eventData);
+    void GrabLadder(Ladder *ladder);
 
     static Urho3D::SharedPtr<Urho3D::Model> cylinderModel_;
 
     Urho3D::Node *node_;
     Urho3D::Vector3 walkDir_;
-    bool onLadder_;
+    Ladder *ladder_;
+    Ladder *ignoringLadder_;
+    unsigned ignoringLadderSince_;
     bool onGround_;
     bool wantJump_;
 };

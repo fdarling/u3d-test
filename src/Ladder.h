@@ -20,9 +20,12 @@ class Ladder
 public:
     Ladder(Urho3D::Scene *scene, const Urho3D::Vector3 &pos, const Urho3D::Vector3 &size);
     ~Ladder();
-    
+
     void ConstrainNode(Urho3D::Node *otherNode);
     void UnconstrainNode(Urho3D::Node *otherNode);
+
+    Urho3D::Node * GetNode() {return node_;}
+    const Urho3D::Node * GetNode() const {return node_;}
 protected:
     typedef std::unordered_map<Urho3D::Node*, btGeneric6DofConstraint*> ConstraintMap;
     Urho3D::Node *node_;

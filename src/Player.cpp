@@ -1,8 +1,10 @@
 #include "Player.h"
+#include "Ladder.h"
 #include "CreateMaterial.h"
 #include "CreatePrimitives.h"
 #include "globals.h"
 
+#include <Urho3D/Core/Timer.h>
 #include <Urho3D/Graphics/Material.h>
 #include <Urho3D/Graphics/Model.h>
 #include <Urho3D/Graphics/StaticModel.h>
@@ -15,13 +17,14 @@
 #include <Urho3D/ThirdParty/Bullet/BulletDynamics/Dynamics/btDiscreteDynamicsWorld.h>
 #include <Urho3D/ThirdParty/Bullet/BulletDynamics/Dynamics/btRigidBody.h>
 
+using Urho3D::Time;
 using Urho3D::Node;
 using Urho3D::Vector3;
 using Urho3D::StaticModel;
 using Urho3D::RigidBody;
 using Urho3D::CollisionShape;
 using Urho3D::Color;
-using Urho3D::E_NODECOLLISION;
+using Urho3D::E_NODECOLLISIONSTART;
 namespace NodeCollisionStart = Urho3D::NodeCollisionStart;
 
 Urho3D::SharedPtr<Urho3D::Model> Player::cylinderModel_;
@@ -30,7 +33,9 @@ Player::Player(Urho3D::Scene *scene, const Urho3D::Vector3 &pos) :
     Urho3D::Object(scene->GetContext()),
     node_(nullptr),
     walkDir_(Vector3::ZERO),
-    onLadder_(false),
+    ladder_(nullptr),
+    ignoringLadder_(nullptr),
+    ignoringLadderSince_(0),
     onGround_(false),
     wantJump_(false)
 {
@@ -62,7 +67,7 @@ Player::Player(Urho3D::Scene *scene, const Urho3D::Vector3 &pos) :
     btRigidBody * const bulletBody = body->GetBody();
     bulletBody->setUserIndex(PhysicsUserIndex::Player);
 
-    node_->SubscribeToEvent(node_, E_NODECOLLISION, URHO3D_HANDLER(Player, HandleNodeCollision));
+    SubscribeToEvent(node_, E_NODECOLLISIONSTART, URHO3D_HANDLER(Player, HandleNodeCollision));
 }
 
 Player::~Player()
@@ -100,7 +105,12 @@ void Player::Advance()
     body->GetPhysicsWorld()->GetWorld()->contactTest(body->GetBody(), callback);
     onGround_ = callback.onGround;
 
-    if (walkDir_ != Vector3::ZERO)
+    if (IsOnLadder())
+    {
+        body->Activate();
+        body->SetLinearVelocity(walkDir_*PLAYER_WALK_SPEED);
+    }
+    else if (walkDir_ != Vector3::ZERO)
     {
         const Vector3 currentVelocity = body->GetLinearVelocity();
         const float mass = body->GetMass();
@@ -114,7 +124,25 @@ void Player::Advance()
             // std::cout << "force: (" << force.x_ << "," << force.y_ << "," << force.z_ << ")" << std::endl;
         }
     }
-    if (wantJump_ && onGround_)
+    if (wantJump_ && IsOnLadder())
+    {
+        // determine the jump-away direction
+        Vector3 v = (node_->GetPosition() - ladder_->GetNode()->GetPosition());
+        v.y_ = 0.0;
+        v = v.Normalized()*PLAYER_JUMP_VELOCITY;
+
+        // start ignoring this ladder for a small amount of time (so we don't re-grab it)
+        ignoringLadder_ = ladder_;
+        ignoringLadderSince_ = Time::GetSystemTime();
+
+        // let go of the ladder
+        GrabLadder(nullptr);
+
+        // jump away
+        body->Activate();
+        body->SetLinearVelocity(v);
+    }
+    else if (wantJump_ && IsOnGround())
     {
         Vector3 v = body->GetLinearVelocity();
         v.y_ = PLAYER_JUMP_VELOCITY;
@@ -133,15 +161,44 @@ void Player::SetJumping(bool en)
     wantJump_ = en;
 }
 
+static const unsigned IGNORING_LADDER_TIMEOUT_MS = 200;
+
 void Player::HandleNodeCollision(Urho3D::StringHash eventType, Urho3D::VariantMap &eventData)
 {
     Node * const nodeB = static_cast<Node*>(eventData[NodeCollisionStart::P_OTHERNODE].GetPtr());
     RigidBody * const bodyB = static_cast<RigidBody*>(eventData[NodeCollisionStart::P_OTHERBODY].GetPtr());
-    if (bodyB)
+    if (nodeB && bodyB)
     {
         if (bodyB->GetBody()->getUserIndex() == PhysicsUserIndex::Ladder)
         {
-            // std::cout << "\t\ttouching a Ladder!" << std::endl;
+            Ladder * const ladder = reinterpret_cast<Ladder*>(nodeB->GetVar("GameObjectPtr").GetVoidPtr());
+            if (ladder == ignoringLadder_ && (Time::GetSystemTime() - ignoringLadderSince_ < IGNORING_LADDER_TIMEOUT_MS))
+                return;
+            GrabLadder(ladder);
         }
     }
+}
+
+void Player::GrabLadder(Ladder *ladder)
+{
+    // no change case
+    if (ladder_ == ladder)
+        return;
+
+    // let go of old ladder
+    if (ladder_)
+        ladder_->UnconstrainNode(node_);
+
+    // remember the ladder
+    ladder_ = ladder;
+
+    // access our physics body
+    RigidBody * const body = node_->GetComponent<RigidBody>();
+
+    // attach to the new ladder
+    if (ladder)
+        ladder->ConstrainNode(node_);
+
+    // no gravity when on any ladder
+    body->SetUseGravity(!ladder);
 }

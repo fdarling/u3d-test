@@ -13,7 +13,7 @@ using Urho3D::Vector3;
 using Urho3D::RigidBody;
 using Urho3D::CollisionShape;
 using Urho3D::VectorBuffer;
-using Urho3D::E_NODECOLLISION;
+using Urho3D::E_NODECOLLISIONSTART;
 namespace NodeCollisionStart = Urho3D::NodeCollisionStart;
 
 JumpPad::JumpPad(Urho3D::Scene *scene, const Urho3D::Vector3 &pos, const Urho3D::Vector3 &size) :
@@ -33,7 +33,7 @@ JumpPad::JumpPad(Urho3D::Scene *scene, const Urho3D::Vector3 &pos, const Urho3D:
     // bulletBody->setCollisionFlags(btCollisionObject::CF_NO_CONTACT_RESPONSE | btCollisionObject::CF_CUSTOM_MATERIAL_CALLBACK); // for contact added callback to be called
     bulletBody->setUserIndex(PhysicsUserIndex::JumpPad);
 
-    node_->SubscribeToEvent(node_, E_NODECOLLISION, URHO3D_HANDLER(JumpPad, HandleNodeCollision));
+    SubscribeToEvent(node_, E_NODECOLLISIONSTART, URHO3D_HANDLER(JumpPad, HandleNodeCollision));
 }
 
 JumpPad::~JumpPad()

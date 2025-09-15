@@ -27,6 +27,7 @@ Ladder::Ladder(Urho3D::Scene *scene, const Urho3D::Vector3 &pos, const Urho3D::V
 
     btRigidBody * const body = body_->GetBody();
     body->setUserIndex(PhysicsUserIndex::Ladder);
+    node_->SetVar("GameObjectPtr", this);
 }
 
 Ladder::~Ladder()
@@ -71,8 +72,8 @@ void Ladder::ConstrainNode(Urho3D::Node *otherNode)
 
     // partial XYZ volume around "ladder"
     // TODO use node_->GetComponent<CollisionShape>()->Size()
-    constraint->setLinearLowerLimit(btVector3(-1.25, -8, -1.25));
-    constraint->setLinearUpperLimit(btVector3( 1.25,  8,  1.25));
+    constraint->setLinearLowerLimit(btVector3(-1.0 - PLAYER_RADIUS, -8 - PLAYER_HEIGHT/2.0, -1.0 - PLAYER_RADIUS));
+    constraint->setLinearUpperLimit(btVector3( 1.0 + PLAYER_RADIUS,  8 + PLAYER_HEIGHT/2.0,  1.0 + PLAYER_RADIUS));
 
     // only allow rotation about the Z axis
     // constraint->setAngularLowerLimit(btVector3(0, -SIMD_INFINITY, 0));

@@ -214,6 +214,7 @@ public:
 
         // determine how to use the keys
         const Matrix3 rotMat = Quaternion(yaw_, Vector3::UP).RotationMatrix();
+        const Matrix3 ladderRotMat = Quaternion(-90.0, Vector3::RIGHT).RotationMatrix();
         if (cameraMode_ == CameraMode::FreeLook)
         {
             wasdDir = rotMat*wasdDir;
@@ -222,13 +223,16 @@ public:
                 cameraPos_ += wasdDir.Normalized()*walkDistance;
                 // std::cout << "camera pos: (" << cameraPos_.x_ << "," << cameraPos_.y_ << "," << cameraPos_.z_ << ")" << std::endl;
             }
+            if (player_->IsOnLadder())
+                ijklDir = ladderRotMat*ijklDir;
             ijklDir = rotMat*ijklDir;
             player_->SetWalkDirection(ijklDir.Normalized());
             player_->SetJumping(input->GetKeyDown(KEY_RSHIFT));
         }
         else
         {
-            
+            if (player_->IsOnLadder())
+                wasdDir = ladderRotMat*wasdDir;
             wasdDir = rotMat*wasdDir;
             player_->SetWalkDirection(wasdDir.Normalized());
             player_->SetJumping(input->GetKeyDown(KEY_SPACE));
