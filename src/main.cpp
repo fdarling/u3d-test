@@ -28,6 +28,7 @@
 #include <Urho3D/UI/UI.h>
 #include <Urho3D/UI/UIEvents.h>
 
+#include "VectorShim.h"
 #include "SceneLoader.h"
 #include "Player.h"
 #include "JumpPad.h"
@@ -48,8 +49,11 @@ public:
         Application(context),
         yaw_(0.0f),
         pitch_(0.0f),
+        cameraMode_(CameraMode::FreeLook),
         drawDebug_(false),
-        drawPhysicsDebug_(false)
+        drawPhysicsDebug_(false),
+        shadowsEnabled_(true),
+        ssaoEnabled_(true)
     {
     }
 
@@ -86,13 +90,20 @@ public:
             RenderPipeline * const renderPipeline = scene_->CreateComponent<RenderPipeline>();
             RenderPipelineSettings settings = renderPipeline->GetSettings();
             settings.renderBufferManager_.readableDepth_ = true;
+            // settings.renderBufferManager_.colorSpace_ = RenderPipelineColorSpace::GammaLDR; // default
+            // settings.renderBufferManager_.colorSpace_ = RenderPipelineColorSpace::LinearLDR;
+            // settings.renderBufferManager_.colorSpace_ = RenderPipelineColorSpace::LinearHDR;
+            settings.renderBufferManager_.colorSpace_ = RenderPipelineColorSpace::Optimized;
             // settings.sceneProcessor_.directionalShadowSize_ = 2048;
             // settings.sceneProcessor_.spotShadowSize_ = 2048;
-            settings.sceneProcessor_.pointShadowSize_ = 1024;
+            // settings.sceneProcessor_.pointShadowSize_ = 1024;
+            // settings.sceneProcessor_.ambientMode_ = DrawableAmbientMode::Directional; // default
+            // settings.sceneProcessor_.ambientMode_ = DrawableAmbientMode::Constant;
+            // settings.sceneProcessor_.ambientMode_ = DrawableAmbientMode::Flat;
             // settings.shadowMapAllocator_.shadowAtlasPageSize_ = 8192;
             // TODO how to set the shadow map quality to 16-bit vs 32-bit?
             renderPipeline->SetSettings(settings);
-            renderPipeline->SetRenderPassEnabled(eastl::string("Postprocess: SSAO"), true);
+            renderPipeline->SetRenderPassEnabled(eastl::string("Postprocess: SSAO"), ssaoEnabled_);
         }
 #endif // USING_RBFX
 
@@ -116,9 +127,17 @@ public:
 
         // Camera
         cameraNode_ = scene_->CreateChild("Camera");
-        cameraNode_->SetPosition(Vector3(0.0f, 5.0f, -20.0f));
+        cameraPos_ = Vector3(0.0f, 5.0f, -20.0f);
+        // if (0)
+        {
+            // for looking at the torus
+            cameraPos_ = Vector3(1.15f, 2.97f, -7.82f);
+            pitch_ = 28.2;
+            yaw_ = -17.8;
+        }
         camera_ = cameraNode_->CreateComponent<Camera>();
         camera_->SetFarClip(300.0f);
+        UpdateCamera();
 
         // Viewport
         Renderer * const renderer = GetSubsystem<Renderer>();
@@ -164,35 +183,63 @@ public:
         // get input object for testing keyboard/mouse presses
         Input * const input = GetSubsystem<Input>();
 
-        // camera movement
-        Vector3 cameraMoveDir(Vector3::ZERO);
+        // WASD movement keys
+        Vector3 wasdDir(Vector3::ZERO);
         if ( input->GetKeyDown(KEY_W) && !input->GetKeyDown(KEY_S))
-            cameraMoveDir += Vector3::FORWARD;
+            wasdDir += Vector3::FORWARD;
         if (!input->GetKeyDown(KEY_W) &&  input->GetKeyDown(KEY_S))
-            cameraMoveDir += Vector3::BACK;
+            wasdDir += Vector3::BACK;
         if ( input->GetKeyDown(KEY_A) && !input->GetKeyDown(KEY_D))
-            cameraMoveDir += Vector3::LEFT;
+            wasdDir += Vector3::LEFT;
         if (!input->GetKeyDown(KEY_A) &&  input->GetKeyDown(KEY_D))
-            cameraMoveDir += Vector3::RIGHT;
-        if ( input->GetKeyDown(KEY_LCTRL) && !input->GetKeyDown(KEY_SPACE))
-            cameraMoveDir += Vector3::DOWN;
-        if (!input->GetKeyDown(KEY_LCTRL) &&  input->GetKeyDown(KEY_SPACE))
-            cameraMoveDir += Vector3::UP;
-        if (cameraMoveDir != Vector3::ZERO)
-            cameraNode_->Translate(cameraMoveDir.Normalized()*walkDistance);
+            wasdDir += Vector3::RIGHT;
+        if (cameraMode_ == CameraMode::FreeLook)
+        {
+            if ( input->GetKeyDown(KEY_LCTRL) && !input->GetKeyDown(KEY_SPACE))
+                wasdDir += Vector3::DOWN;
+            if (!input->GetKeyDown(KEY_LCTRL) &&  input->GetKeyDown(KEY_SPACE))
+                wasdDir += Vector3::UP;
+        }
 
-        // player movement
-        Vector3 playerMoveDir(Vector3::ZERO);
+        // IJKL movement keys
+        Vector3 ijklDir(Vector3::ZERO);
         if ( input->GetKeyDown(KEY_I) && !input->GetKeyDown(KEY_K))
-            playerMoveDir += Vector3::FORWARD;
+            ijklDir += Vector3::FORWARD;
         if (!input->GetKeyDown(KEY_I) &&  input->GetKeyDown(KEY_K))
-            playerMoveDir += Vector3::BACK;
+            ijklDir += Vector3::BACK;
         if ( input->GetKeyDown(KEY_J) && !input->GetKeyDown(KEY_L))
-            playerMoveDir += Vector3::LEFT;
+            ijklDir += Vector3::LEFT;
         if (!input->GetKeyDown(KEY_J) &&  input->GetKeyDown(KEY_L))
-            playerMoveDir += Vector3::RIGHT;
-        player_->SetWalkDirection(playerMoveDir.Normalized());
-        player_->SetJumping(input->GetKeyDown(KEY_RSHIFT));
+            ijklDir += Vector3::RIGHT;
+
+        // determine how to use the keys
+        const Matrix3 rotMat = Quaternion(yaw_, Vector3::UP).RotationMatrix();
+        if (cameraMode_ == CameraMode::FreeLook)
+        {
+            wasdDir = rotMat*wasdDir;
+            if (wasdDir != Vector3::ZERO)
+            {
+                cameraPos_ += wasdDir.Normalized()*walkDistance;
+                // std::cout << "camera pos: (" << cameraPos_.x_ << "," << cameraPos_.y_ << "," << cameraPos_.z_ << ")" << std::endl;
+            }
+            ijklDir = rotMat*ijklDir;
+            player_->SetWalkDirection(ijklDir.Normalized());
+            player_->SetJumping(input->GetKeyDown(KEY_RSHIFT));
+        }
+        else
+        {
+            
+            wasdDir = rotMat*wasdDir;
+            player_->SetWalkDirection(wasdDir.Normalized());
+            player_->SetJumping(input->GetKeyDown(KEY_SPACE));
+        }
+
+        // cycle camera mode
+        if (input->GetKeyPress(KEY_T))
+        {
+            cameraMode_ = static_cast<CameraMode>((static_cast<int>(cameraMode_)+1)%static_cast<int>(CameraMode::MAX));
+        }
+        UpdateCamera();
 
         // toggle graphics debug rendering
         if (input->GetKeyPress(KEY_Z))
@@ -205,6 +252,30 @@ public:
         // toggle debug drawing
         if (input->GetKeyPress(KEY_C))
             drawPhysicsDebug_ = !drawPhysicsDebug_;
+
+        // toggle shadows
+        if (input->GetKeyPress(KEY_M))
+        {
+            shadowsEnabled_ = !shadowsEnabled_;
+            ea::vector<Light*> lights;
+#ifdef USING_RBFX
+            scene_->FindComponents<Light>(lights, ComponentSearchFlag::SelfOrChildrenRecursive);
+#else
+            scene_->GetComponents<Light>(lights, true);
+#endif // USING_RBFX
+            for (Light * const light : lights)
+                light->SetCastShadows(shadowsEnabled_);
+        }
+
+#ifdef USING_RBFX
+        // toggle SSAO
+        if (input->GetKeyPress(KEY_O))
+        {
+            ssaoEnabled_ = !ssaoEnabled_;
+            RenderPipeline * const renderPipeline = scene_->GetComponent<RenderPipeline>();
+            renderPipeline->SetRenderPassEnabled(eastl::string("Postprocess: SSAO"), ssaoEnabled_);
+        }
+#endif // USING_RBFX
 
         // toggle mouse grabbing / mouselook
         if (input->GetKeyPress(KEY_TAB))
@@ -241,17 +312,40 @@ public:
         Input * const input = GetSubsystem<Input>();
         if (input->GetMouseMode() != MM_RELATIVE) return;
 
-        int dx = eventData[MouseMove::P_DX].GetInt();
-        int dy = eventData[MouseMove::P_DY].GetInt();
+        const int dx = eventData[MouseMove::P_DX].GetInt();
+        const int dy = eventData[MouseMove::P_DY].GetInt();
 
         const float mouseSensitivity = 0.2f;
         yaw_ += dx * mouseSensitivity;
         pitch_ += dy * mouseSensitivity;
         pitch_ = Clamp(pitch_, -90.0f, 90.0f);
 
-        cameraNode_->SetRotation(Quaternion(pitch_, yaw_, 0.0f));
+        // std::cout << "camera pitch/yaw: " << pitch_ << "," << yaw_ << std::endl;
+        // UpdateCamera();
     }
-private:
+protected:
+    void UpdateCamera()
+    {
+        const Quaternion quat = Quaternion(pitch_, yaw_, 0.0f);
+        Vector3 cPos;
+        if (cameraMode_ == CameraMode::FreeLook)
+            cPos = cameraPos_;
+        else
+        {
+            cPos = player_->GetNode()->GetPosition();
+            if (cameraMode_ == CameraMode::ThirdPerson)
+                cPos += quat.RotationMatrix()*Vector3(0.0, 2.0, -10.0);
+        }
+        cameraNode_->SetPosition(cPos);
+        cameraNode_->SetRotation(quat);
+    }
+    enum class CameraMode
+    {
+        FreeLook,
+        FirstPerson,
+        ThirdPerson,
+        MAX
+    };
     SharedPtr<Scene> scene_;
     SharedPtr<Node> cameraNode_;
     SharedPtr<DebugHud> debugHud_;
@@ -260,10 +354,14 @@ private:
     SharedPtr<Zone> zone_;
     SharedPtr<Camera> camera_;
     SharedPtr<Player> player_;
+    Vector3 cameraPos_;
     float yaw_;
     float pitch_;
+    CameraMode cameraMode_;
     bool drawDebug_;
     bool drawPhysicsDebug_;
+    bool shadowsEnabled_;
+    bool ssaoEnabled_;
 };
 
 URHO3D_DEFINE_APPLICATION_MAIN(MyApp);

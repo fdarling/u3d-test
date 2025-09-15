@@ -25,6 +25,8 @@ public:
     void SetWalkDirection(const Urho3D::Vector3 &dir);
     void SetJumping(bool en);
     bool IsOnGround() const {return onGround_;}
+    Urho3D::Node * GetNode() {return node_;}
+    const Urho3D::Node * GetNode() const {return node_;}
 protected:
     void HandleNodeCollision(Urho3D::StringHash eventType, Urho3D::VariantMap &eventData);
 

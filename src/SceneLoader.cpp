@@ -64,11 +64,7 @@ static void processAssimpLights(const aiScene* ai_scene, Node* parentNode)
 
         // TODO set range & brightness
         light->SetRange(50.0f);
-#ifdef USING_RBFX
-        light->SetBrightness(3.0f); // Adjust as needed
-#else
-        light->SetBrightness(1.0f); // Adjust as needed
-#endif
+        light->SetBrightness(1.0f);
 
         // enable shadow casting
         light->SetCastShadows(true);
