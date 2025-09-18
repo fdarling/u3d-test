@@ -90,15 +90,23 @@ public:
             // settings.renderBufferManager_.colorSpace_ = RenderPipelineColorSpace::GammaLDR; // default
             // settings.renderBufferManager_.colorSpace_ = RenderPipelineColorSpace::LinearLDR;
             // settings.renderBufferManager_.colorSpace_ = RenderPipelineColorSpace::LinearHDR;
-            settings.renderBufferManager_.colorSpace_ = RenderPipelineColorSpace::Optimized;
-            // settings.sceneProcessor_.directionalShadowSize_ = 2048;
-            // settings.sceneProcessor_.spotShadowSize_ = 2048;
-            // settings.sceneProcessor_.pointShadowSize_ = 1024;
+            // settings.renderBufferManager_.colorSpace_ = RenderPipelineColorSpace::Optimized;
+            // settings.sceneProcessor_.directionalShadowSize_ = 1024; // default
+            // settings.sceneProcessor_.spotShadowSize_ = 1024; // default
+            // settings.sceneProcessor_.pointShadowSize_ = 256; // default
+            settings.sceneProcessor_.pointShadowSize_ = 1024;
             // settings.sceneProcessor_.ambientMode_ = DrawableAmbientMode::Directional; // default
             // settings.sceneProcessor_.ambientMode_ = DrawableAmbientMode::Constant;
             // settings.sceneProcessor_.ambientMode_ = DrawableAmbientMode::Flat;
-            // settings.shadowMapAllocator_.shadowAtlasPageSize_ = 8192;
-            // TODO how to set the shadow map quality to 16-bit vs 32-bit?
+            // settings.shadowMapAllocator_.enableVarianceShadowMaps_ = false; // default
+            // settings.shadowMapAllocator_.varianceShadowMapMultiSample_ = 1;
+            // settings.shadowMapAllocator_.use16bitShadowMaps_ = false; // default
+            // settings.shadowMapAllocator_.shadowAtlasPageSize_ = 2048; // default
+            settings.shadowMapAllocator_.shadowAtlasPageSize_ = 8192; // trying
+            // settings.shadowMapAllocator_.depthBiasScale_ = 1.0; // default
+            // settings.shadowMapAllocator_.depthBiasScale_ = 0.5;
+            // settings.shadowMapAllocator_.depthBiasOffset_ = 0.0; // default
+            // settings.shadowMapAllocator_.depthBiasOffset_ = 0.0001;
             renderPipeline->SetSettings(settings);
             renderPipeline->SetRenderPassEnabled(eastl::string("Postprocess: SSAO"), ssaoEnabled_);
         }
