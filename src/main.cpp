@@ -24,9 +24,6 @@
 #include <Urho3D/Engine/DebugHud.h>
 #endif // USING_RBFX
 #include <Urho3D/IO/Log.h>
-#include <Urho3D/UI/Font.h>
-#include <Urho3D/UI/UI.h>
-#include <Urho3D/UI/UIEvents.h>
 
 #include "VectorShim.h"
 #include "SceneLoader.h"
@@ -49,9 +46,9 @@ public:
         Application(context),
         yaw_(0.0f),
         pitch_(0.0f),
-        cameraMode_(CameraMode::FreeLook),
+        cameraMode_(CameraMode::ThirdPerson),
         drawDebug_(false),
-        drawPhysicsDebug_(false),
+        drawPhysicsDebug_(true),
         shadowsEnabled_(true),
         ssaoEnabled_(true)
     {
@@ -213,36 +210,39 @@ public:
             ijklDir += Vector3::RIGHT;
 
         // determine how to use the keys
-        const Matrix3 rotMat = Quaternion(yaw_, Vector3::UP).RotationMatrix();
-        const Matrix3 ladderRotMat = Quaternion(-90.0, Vector3::RIGHT).RotationMatrix();
+        const bool usingWasdForWalking = (cameraMode_ != CameraMode::FreeLook);
+        const Matrix3 horizRotMat = Quaternion(yaw_, Vector3::UP).RotationMatrix();
+        const Vector3 facingDir = cameraNode_->GetWorldDirection().Normalized();
+        const bool facingLadder = player_->IsFacingLadder(facingDir);
+        const float adjustedPitch = player_->IsOnLadder() ? (1.0f*(pitch_ - (facingLadder ? 45.0f : -45.0f))) : pitch_;
+        const Matrix3 vertRotMat = Quaternion(Clamp(adjustedPitch, -90.0f, 90.0f), 0.0f, 0.0f).RotationMatrix();
+        const Matrix3 fullRotMat = horizRotMat*vertRotMat;
+
         if (cameraMode_ == CameraMode::FreeLook)
         {
-            wasdDir = rotMat*wasdDir;
+            // move camera
+            wasdDir = fullRotMat*wasdDir;
             if (wasdDir != Vector3::ZERO)
             {
                 cameraPos_ += wasdDir.Normalized()*walkDistance;
                 // std::cout << "camera pos: (" << cameraPos_.x_ << "," << cameraPos_.y_ << "," << cameraPos_.z_ << ")" << std::endl;
             }
-            if (player_->IsOnLadder())
-                ijklDir = ladderRotMat*ijklDir;
-            ijklDir = rotMat*ijklDir;
+
+            // walk separately
+            ijklDir = fullRotMat*ijklDir;
             player_->SetWalkDirection(ijklDir.Normalized());
             player_->SetJumping(input->GetKeyDown(KEY_RSHIFT));
         }
         else
         {
-            if (player_->IsOnLadder())
-                wasdDir = ladderRotMat*wasdDir;
-            wasdDir = rotMat*wasdDir;
+            wasdDir = fullRotMat*wasdDir;
             player_->SetWalkDirection(wasdDir.Normalized());
             player_->SetJumping(input->GetKeyDown(KEY_SPACE));
         }
 
         // cycle camera mode
         if (input->GetKeyPress(KEY_T))
-        {
             cameraMode_ = static_cast<CameraMode>((static_cast<int>(cameraMode_)+1)%static_cast<int>(CameraMode::MAX));
-        }
         UpdateCamera();
 
         // toggle graphics debug rendering

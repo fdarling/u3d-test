@@ -29,6 +29,7 @@ public:
     void SetJumping(bool en);
     bool IsOnLadder() const {return ladder_;}
     bool IsOnGround() const {return onGround_;}
+    bool IsFacingLadder(const Urho3D::Vector3 &faceDir) const;
     Urho3D::Node * GetNode() {return node_;}
     const Urho3D::Node * GetNode() const {return node_;}
 protected:

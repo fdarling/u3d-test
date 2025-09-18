@@ -40,6 +40,14 @@ Ladder::~Ladder()
     body_ = nullptr;
 }
 
+Vector3 Ladder::GetNormalForPoint(const Urho3D::Vector3 &pt) const
+{
+    Vector3 v = pt - node_->GetPosition();
+    v.y_ = 0.0; // remove the vertical component TODO: "snap" the direction to cardinal directions
+    v.Normalize();
+    return v;
+}
+
 void Ladder::ConstrainNode(Urho3D::Node *otherNode)
 {
     // make sure we didn't already constrain it

@@ -81,19 +81,19 @@ struct ContactCallback : public btCollisionWorld::ContactResultCallback
     btScalar addSingleResult(btManifoldPoint& cp, const btCollisionObjectWrapper* colObj0Wrap, int, int, const btCollisionObjectWrapper* colObj1Wrap, int, int) override
     {
         btVector3 normal = cp.m_normalWorldOnB;
-        if ((colObj0Wrap->m_collisionObject->getUserIndex() == PhysicsUserIndex::Ladder ||
-            colObj1Wrap->m_collisionObject->getUserIndex() == PhysicsUserIndex::Ladder) &&
-            normal.getY() < 0.4)
-        {
-            onLadder = true;
-        }
         if (colObj1Wrap->m_collisionObject->getUserIndex() == PhysicsUserIndex::Player)
             normal = -normal; // Player is second body
         if (normal.getY() > 0.4 && cp.getDistance() < 0.f)
-            onGround = true;
+        {
+            if (colObj0Wrap->m_collisionObject->getUserIndex() != PhysicsUserIndex::Ladder &&
+                colObj1Wrap->m_collisionObject->getUserIndex() != PhysicsUserIndex::Ladder)
+            {
+                onGround = true;
+            }
+        }
         return 0.0;
     }
-    bool onLadder{false};
+    // bool onLadder{false};
     bool onGround{false};
 };
 
@@ -107,6 +107,15 @@ void Player::Advance()
 
     if (IsOnLadder())
     {
+        if (IsOnGround() && walkDir_ != Vector3::ZERO && !IsFacingLadder(walkDir_))
+        {
+            ignoringLadder_ = ladder_;
+            ignoringLadderSince_ = Time::GetSystemTime();
+
+            // let go of the ladder
+            const Vector3 v = ladder_->GetNormalForPoint(node_->GetPosition());
+            GrabLadder(nullptr);
+        }
         body->Activate();
         body->SetLinearVelocity(walkDir_*PLAYER_WALK_SPEED);
     }
@@ -159,6 +168,16 @@ void Player::SetWalkDirection(const Urho3D::Vector3 &dir)
 void Player::SetJumping(bool en)
 {
     wantJump_ = en;
+}
+
+bool Player::IsFacingLadder(const Vector3 &faceDir) const
+{
+    if (!ladder_)
+        return false;
+
+    const Vector3 v = ladder_->GetNormalForPoint(node_->GetPosition());
+
+    return faceDir.DotProduct(v) < 0.0;
 }
 
 static const unsigned IGNORING_LADDER_TIMEOUT_MS = 200;

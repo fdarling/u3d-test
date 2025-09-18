@@ -21,6 +21,8 @@ public:
     Ladder(Urho3D::Scene *scene, const Urho3D::Vector3 &pos, const Urho3D::Vector3 &size);
     ~Ladder();
 
+    Urho3D::Vector3 GetNormalForPoint(const Urho3D::Vector3 &pt) const;
+
     void ConstrainNode(Urho3D::Node *otherNode);
     void UnconstrainNode(Urho3D::Node *otherNode);
 
