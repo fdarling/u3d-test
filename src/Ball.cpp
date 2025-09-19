@@ -45,6 +45,8 @@ Ball::Ball(Urho3D::Scene *scene, const Urho3D::Vector3 &pos, const Urho3D::Vecto
     body->SetLinearDamping(0.0f);
     body->SetAngularDamping(0.2f);
     body->SetLinearVelocity(vel);
+    body->SetCcdRadius(BALL_RADIUS*0.98); // TODO it is supposed to be smaller, right?
+    body->SetCcdMotionThreshold(1e-7); // TODO why this number?
 
     // create physics shape
     CollisionShape * const shape = node_->CreateComponent<CollisionShape>();

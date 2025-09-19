@@ -72,8 +72,8 @@ public:
         scene_ = new Scene(context_);
         octree_ = scene_->CreateComponent<Octree>();
         physicsWorld_ = scene_->CreateComponent<PhysicsWorld>();
-        physicsWorld_->SetMaxSubSteps(10);
-        physicsWorld_->SetFps(240);
+        // physicsWorld_->SetMaxSubSteps(10); // default is 0 for unlimited
+        // physicsWorld_->SetFps(240); // default is 60
         DebugRenderer * const debugRenderer = scene_->CreateComponent<DebugRenderer>();
         zone_ = scene_->CreateComponent<Zone>();
         zone_->SetBoundingBox(BoundingBox(-1000.0f, 1000.0f));
