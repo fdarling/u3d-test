@@ -91,6 +91,9 @@ public:
             // settings.renderBufferManager_.colorSpace_ = RenderPipelineColorSpace::LinearLDR;
             // settings.renderBufferManager_.colorSpace_ = RenderPipelineColorSpace::LinearHDR;
             // settings.renderBufferManager_.colorSpace_ = RenderPipelineColorSpace::Optimized;
+            // settings.sceneProcessor_.pcfKernelSize_ = 1; // default
+            settings.sceneProcessor_.pcfKernelSize_ = 2; // default
+            // settings.sceneProcessor_.normalOffsetScale_ = 1.0; // default
             // settings.sceneProcessor_.directionalShadowSize_ = 1024; // default
             // settings.sceneProcessor_.spotShadowSize_ = 1024; // default
             // settings.sceneProcessor_.pointShadowSize_ = 256; // default
@@ -99,7 +102,9 @@ public:
             // settings.sceneProcessor_.ambientMode_ = DrawableAmbientMode::Constant;
             // settings.sceneProcessor_.ambientMode_ = DrawableAmbientMode::Flat;
             // settings.shadowMapAllocator_.enableVarianceShadowMaps_ = false; // default
-            // settings.shadowMapAllocator_.varianceShadowMapMultiSample_ = 1;
+            // settings.shadowMapAllocator_.enableVarianceShadowMaps_ = true;
+            // settings.shadowMapAllocator_.varianceShadowMapMultiSample_ = 1; // default
+            // settings.shadowMapAllocator_.varianceShadowMapMultiSample_ = 4;
             // settings.shadowMapAllocator_.use16bitShadowMaps_ = false; // default
             // settings.shadowMapAllocator_.shadowAtlasPageSize_ = 2048; // default
             settings.shadowMapAllocator_.shadowAtlasPageSize_ = 8192; // trying
