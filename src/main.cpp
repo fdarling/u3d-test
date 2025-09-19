@@ -237,13 +237,19 @@ public:
             }
 
             // walk separately
-            ijklDir = fullRotMat*ijklDir;
+            if (player_->IsOnLadder())
+                ijklDir = fullRotMat*ijklDir;
+            else
+                ijklDir = horizRotMat*ijklDir;
             player_->SetWalkDirection(ijklDir.Normalized());
             player_->SetJumping(input->GetKeyDown(KEY_RSHIFT));
         }
         else
         {
-            wasdDir = fullRotMat*wasdDir;
+            if (player_->IsOnLadder())
+                wasdDir = fullRotMat*wasdDir;
+            else
+                wasdDir = horizRotMat*wasdDir;
             player_->SetWalkDirection(wasdDir.Normalized());
             player_->SetJumping(input->GetKeyDown(KEY_SPACE));
         }
