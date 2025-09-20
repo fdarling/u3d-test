@@ -115,7 +115,6 @@ void Player::Advance()
             ignoringLadderSince_ = Time::GetSystemTime();
 
             // let go of the ladder
-            const Vector3 v = ladder_->GetNormalForPoint(node_->GetPosition());
             GrabLadder(nullptr);
         }
         body->Activate();
@@ -138,9 +137,7 @@ void Player::Advance()
     if (wantJump_ && IsOnLadder())
     {
         // determine the jump-away direction
-        Vector3 v = (node_->GetPosition() - ladder_->GetNode()->GetPosition());
-        v.y_ = 0.0;
-        v = v.Normalized()*PLAYER_JUMP_VELOCITY;
+        const Vector3 v = ladder_->GetNormalForPoint(node_->GetPosition())*PLAYER_JUMP_VELOCITY;
 
         // start ignoring this ladder for a small amount of time (so we don't re-grab it)
         ignoringLadder_ = ladder_;

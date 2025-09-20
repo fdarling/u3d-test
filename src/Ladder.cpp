@@ -10,6 +10,10 @@
 #include <Urho3D/ThirdParty/Bullet/BulletDynamics/Dynamics/btRigidBody.h>
 #include <Urho3D/ThirdParty/Bullet/BulletDynamics/ConstraintSolver/btGeneric6DofConstraint.h>
 
+#include <array> // for std::array<>
+#include <algorithm> // for std::max_element()
+#include <limits> // for std::numeric_limits<>
+
 using Urho3D::Vector3;
 using Urho3D::RigidBody;
 using Urho3D::CollisionShape;
@@ -42,10 +46,30 @@ Ladder::~Ladder()
 
 Vector3 Ladder::GetNormalForPoint(const Urho3D::Vector3 &pt) const
 {
+    // calculate "cylindrical" normal
     Vector3 v = pt - node_->GetPosition();
-    v.y_ = 0.0; // remove the vertical component TODO: "snap" the direction to cardinal directions
+    v.y_ = 0.0; // remove the vertical component
+    if (v == Vector3::ZERO)
+        return Vector3::ZERO;
     v.Normalize();
-    return v;
+
+    // find which cardinal direction best matches the vector
+    // TODO: take the node's rotation into consideration...
+    static const std::array<Vector3, 4> CARDINAL_DIRECTIONS{
+        Vector3::LEFT,
+        Vector3::RIGHT,
+        Vector3::FORWARD,
+        Vector3::BACK
+    };
+    std::array<float, 4> dotProducts;
+    std::transform(CARDINAL_DIRECTIONS.begin(), CARDINAL_DIRECTIONS.end(), dotProducts.begin(), [&] (const Vector3 &dir) {
+        return v.DotProduct(dir);
+    });
+    std::array<float, 4>::const_iterator bestIt = std::max_element(dotProducts.cbegin(), dotProducts.cend());
+    std::size_t bestIndex = std::distance(dotProducts.cbegin(), bestIt);
+
+    // use that cardinal direction
+    return CARDINAL_DIRECTIONS[bestIndex];
 }
 
 void Ladder::ConstrainNode(Urho3D::Node *otherNode)
