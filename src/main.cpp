@@ -226,8 +226,40 @@ public:
         const bool usingWasdForWalking = (cameraMode_ != CameraMode::FreeLook);
         const Matrix3 horizRotMat = Quaternion(yaw_, Vector3::UP).RotationMatrix();
         const Vector3 facingDir = cameraNode_->GetWorldDirection().Normalized();
-        const bool facingLadder = player_->IsFacingLadder(facingDir);
-        const float adjustedPitch = player_->IsOnLadder() ? (1.0f*(pitch_ - (facingLadder ? 45.0f : -45.0f))) : pitch_;
+
+        auto adjustPitch = [] (Player *player, const Vector3 &facingDir, const Vector3 &walkDir, float pitch) -> float {
+            // leave pitch unmodified if we aren't even on a ladder
+            if (!player->IsOnLadder())
+                return pitch;
+
+            // check to see if we are at the top of the ladder (maximum altitude)
+            const bool aboveLadderVertically = player->IsAboveLadderVertically();
+            if (aboveLadderVertically)
+            {
+                // are we on top of the ladder (in the sense of it being a platform)?
+                const bool aboveLadderHorizontally = player->IsAboveLadderHorizontally();
+                if (aboveLadderHorizontally)
+                    return pitch;
+
+                // are we walking onto the top of the ladder?
+                const bool walkingTowardsLadder = player->IsFacingLadder(walkDir);
+                if (walkingTowardsLadder)
+                    return pitch;
+            }
+
+            // we are not at the top of the ladder, or we are at the top but
+            // trying to climb down not up
+            const bool facingLadder = player->IsFacingLadder(facingDir);
+            pitch += facingLadder ? -45.0f : 45.0f;
+            return Clamp(2.0f*pitch, -90.0f, 90.0f);
+        };
+
+        // we must not adjust the pitch if:
+        // 1) we are not even on the ladder at all
+        // 2) we are on the ladder, but at the top facing and trying to walk "inwards"
+        // 3) we are 
+        const Vector3 originalHorizWalkDir = horizRotMat*(usingWasdForWalking ? wasdDir : ijklDir);
+        const float adjustedPitch = adjustPitch(player_, facingDir, originalHorizWalkDir, pitch_);
         const Matrix3 vertRotMat = Quaternion(Clamp(adjustedPitch, -90.0f, 90.0f), 0.0f, 0.0f).RotationMatrix();
         const Matrix3 fullRotMat = horizRotMat*vertRotMat;
 

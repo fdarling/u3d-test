@@ -23,7 +23,9 @@ using Urho3D::Vector3;
 using Urho3D::StaticModel;
 using Urho3D::RigidBody;
 using Urho3D::CollisionShape;
+using Urho3D::BoundingBox;
 using Urho3D::Color;
+using Urho3D::OUTSIDE;
 using Urho3D::E_NODECOLLISIONSTART;
 namespace NodeCollisionStart = Urho3D::NodeCollisionStart;
 
@@ -178,6 +180,39 @@ bool Player::IsFacingLadder(const Vector3 &faceDir) const
     const Vector3 v = ladder_->GetNormalForPoint(node_->GetPosition());
 
     return faceDir.DotProduct(v) < 0.0;
+}
+
+static const float OVERLAP_TOLERANCE = 0.05;
+static const Vector3 HORIZONTAL_OVERLAP_TOLERANCE(OVERLAP_TOLERANCE, 0.0f, OVERLAP_TOLERANCE);
+
+bool Player::IsAboveLadderVertically() const
+{
+    if (!ladder_)
+        return false;
+    CollisionShape * const playerShape = node_->GetComponent<CollisionShape>();
+    CollisionShape * const ladderShape = ladder_->GetNode()->GetComponent<CollisionShape>();
+    const BoundingBox playerBB = playerShape->GetWorldBoundingBox();
+    const BoundingBox ladderBB = ladderShape->GetWorldBoundingBox();
+    return playerBB.min_.y_ + OVERLAP_TOLERANCE >= ladderBB.max_.y_;
+}
+
+bool Player::IsAboveLadderHorizontally() const
+{
+    if (!ladder_)
+        return false;
+    CollisionShape * const playerShape = node_->GetComponent<CollisionShape>();
+    CollisionShape * const ladderShape = ladder_->GetNode()->GetComponent<CollisionShape>();
+    const BoundingBox playerBB = playerShape->GetWorldBoundingBox();
+          BoundingBox ladderBB = ladderShape->GetWorldBoundingBox();
+
+    // shrink ladder bounding box horizontally
+    ladderBB.min_ += HORIZONTAL_OVERLAP_TOLERANCE;
+    ladderBB.max_ -= HORIZONTAL_OVERLAP_TOLERANCE;
+
+    // grow ladder bounding box vertically by height of player
+    ladderBB.max_.y_ += playerBB.Size().y_;
+
+    return ladderBB.IsInside(playerBB) != OUTSIDE;
 }
 
 static const unsigned IGNORING_LADDER_TIMEOUT_MS = 200;
