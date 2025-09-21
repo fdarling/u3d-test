@@ -212,6 +212,13 @@ bool Player::IsAboveLadderHorizontally() const
     return ladderBB.IsInside(playerBB) != OUTSIDE;
 }
 
+Urho3D::Vector3 Player::GetLadderNormal() const
+{
+    if (!ladder_)
+        return Vector3::ZERO;
+    return ladder_->GetNormalForPoint(node_->GetPosition());
+}
+
 static const unsigned IGNORING_LADDER_TIMEOUT_MS = 200;
 
 void Player::HandleNodeCollision(Urho3D::StringHash eventType, Urho3D::VariantMap &eventData)

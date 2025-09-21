@@ -25,6 +25,13 @@
 #endif // USING_RBFX
 #include <Urho3D/IO/Log.h>
 
+// for debug UI
+#include <Urho3D/UI/Font.h>
+#include <Urho3D/UI/Text.h>
+#include <Urho3D/UI/UI.h>
+#include <Urho3D/UI/UIEvents.h>
+#include <Urho3D/UI/Window.h>
+
 #include "VectorShim.h"
 #include "SceneLoader.h"
 #include "Player.h"
@@ -67,6 +74,55 @@ public:
     virtual void Start() override
     {
         ResourceCache * const cache = GetSubsystem<ResourceCache>();
+#ifdef DEBUGGING_LADDER
+        UI * const ui = GetSubsystem<UI>();
+        {
+            UIElement * const root = ui->GetRoot();
+            root->SetDefaultStyle(cache->GetResource<XMLFile>("UI/DefaultStyle.xml"));
+
+            Window * const w = new Window(context_);
+            w->SetStyleAuto();
+            w->SetLayoutMode(LayoutMode::LM_VERTICAL);
+            root->AddChild(w);
+            w->SetPosition(IntVector2(100, 50));
+
+            debugOnLadderText_ = new Text(context_);
+            w->AddChild(debugOnLadderText_);
+            debugOnLadderText_->SetStyleAuto();
+
+            debugOnGroundText_ = new Text(context_);
+            w->AddChild(debugOnGroundText_);
+            debugOnGroundText_->SetStyleAuto();
+
+            debugLadderCaseText_ = new Text(context_);
+            w->AddChild(debugLadderCaseText_);
+            debugLadderCaseText_->SetStyleAuto();
+
+            debugNormalPitchText_ = new Text(context_);
+            w->AddChild(debugNormalPitchText_);
+            debugNormalPitchText_->SetStyleAuto();
+
+            debugDotProductText_ = new Text(context_);
+            w->AddChild(debugDotProductText_);
+            debugDotProductText_->SetStyleAuto();
+
+            debugCameraDirText_ = new Text(context_);
+            w->AddChild(debugCameraDirText_);
+            debugCameraDirText_->SetStyleAuto();
+
+            debugRawWalkingDirText_ = new Text(context_);
+            w->AddChild(debugRawWalkingDirText_);
+            debugRawWalkingDirText_->SetStyleAuto();
+
+            debugWalkingDirText_ = new Text(context_);
+            w->AddChild(debugWalkingDirText_);
+            debugWalkingDirText_->SetStyleAuto();
+
+            debugLadderNormalText_ = new Text(context_);
+            w->AddChild(debugLadderNormalText_);
+            debugLadderNormalText_->SetStyleAuto();
+        }
+#endif // DEBUGGING_LADDER
 
         // Create scene
         scene_ = new Scene(context_);
@@ -222,15 +278,30 @@ public:
         if (!input->GetKeyDown(KEY_J) &&  input->GetKeyDown(KEY_L))
             ijklDir += Vector3::RIGHT;
 
-        // determine how to use the keys
-        const bool usingWasdForWalking = (cameraMode_ != CameraMode::FreeLook);
-        const Matrix3 horizRotMat = Quaternion(yaw_, Vector3::UP).RotationMatrix();
-        const Vector3 facingDir = cameraNode_->GetWorldDirection().Normalized();
+        auto adjustWalkDir = [&] (Player *player, const Vector3 &faceDir, const Vector3 &walkDir) -> Vector3 {
+#ifdef DEBUGGING_LADDER
+            this->debugOnLadderText_->SetText(eastl::string("On Ladder?: ") + (player->IsOnLadder() ? "true" : "false"));
+            this->debugOnGroundText_->SetText(eastl::string("On Ground?: ") + (player->IsOnGround() ? "true" : "false"));
+#endif // DEBUGGING_LADDER
 
-        auto adjustPitch = [] (Player *player, const Vector3 &facingDir, const Vector3 &walkDir, float pitch) -> float {
             // leave pitch unmodified if we aren't even on a ladder
             if (!player->IsOnLadder())
-                return pitch;
+            {
+#ifdef DEBUGGING_LADDER
+                this->debugLadderCaseText_->SetText(eastl::string("Ladder Case: not on ladder!"));
+#endif // DEBUGGING_LADDER
+                return walkDir;
+            }
+
+            // if we are on the ground and trying to leave the ladder, walk normally
+            const bool walkingTowardsLadder = player->IsFacingLadder(walkDir);
+            if (player->IsOnGround() && !walkingTowardsLadder)
+            {
+#ifdef DEBUGGING_LADDER
+                this->debugLadderCaseText_->SetText(eastl::string("Ladder Case: on ground / walking away"));
+#endif // DEBUGGING_LADDER
+                return walkDir;
+            }
 
             // check to see if we are at the top of the ladder (maximum altitude)
             const bool aboveLadderVertically = player->IsAboveLadderVertically();
@@ -239,29 +310,61 @@ public:
                 // are we on top of the ladder (in the sense of it being a platform)?
                 const bool aboveLadderHorizontally = player->IsAboveLadderHorizontally();
                 if (aboveLadderHorizontally)
-                    return pitch;
+                {
+#ifdef DEBUGGING_LADDER
+                    this->debugLadderCaseText_->SetText(eastl::string("Ladder Case: already on top"));
+#endif // DEBUGGING_LADDER
+                    return walkDir;
+                }
 
                 // are we walking onto the top of the ladder?
-                const bool walkingTowardsLadder = player->IsFacingLadder(walkDir);
                 if (walkingTowardsLadder)
-                    return pitch;
+                {
+#ifdef DEBUGGING_LADDER
+                    this->debugLadderCaseText_->SetText(eastl::string("Ladder Case: walking onto top"));
+#endif // DEBUGGING_LADDER
+                    return walkDir;
+                }
             }
 
             // we are not at the top of the ladder, or we are at the top but
             // trying to climb down not up
-            const bool facingLadder = player->IsFacingLadder(facingDir);
-            pitch += facingLadder ? -45.0f : 45.0f;
-            return Clamp(2.0f*pitch, -90.0f, 90.0f);
+            const Vector3 ladderNormal = player->GetLadderNormal();
+            const Vector3 rotAxis = ladderNormal.CrossProduct(Vector3::UP);
+            const float normalDot = ladderNormal.DotProduct(walkDir);
+            const Vector3 normalComponent = (ladderNormal*normalDot);
+            if (normalComponent == Vector3::ZERO)
+            {
+#ifdef DEBUGGING_LADDER
+                this->debugLadderCaseText_->SetText(eastl::string("Ladder Case: zero normal component"));
+#endif // DEBUGGING_LADDER
+                return walkDir;
+            }
+            const Vector3 verticalComponent = Vector3::UP*(walkDir.DotProduct(Vector3::UP));
+            const float normalPitch = (verticalComponent + normalComponent).Angle(-ladderNormal);
+            const float targetPitch = Clamp(2.0f*(normalPitch - 45.0f), -89.9f, 89.9f);
+            const Vector3 newWalkDir = Quaternion(targetPitch - normalPitch, rotAxis).RotationMatrix()*walkDir;
+
+#ifdef DEBUGGING_LADDER
+            this->debugLadderCaseText_->SetText(eastl::string("Ladder Case: modifying"));
+            this->debugNormalPitchText_->SetText(eastl::string("Normal Pitch: ") + eastl::to_string(normalPitch));
+            this->debugDotProductText_->SetText(eastl::string("Dot Product: ") + eastl::to_string(normalDot));
+            this->debugCameraDirText_->SetText(eastl::string("Camera Dir: ") + faceDir.ToString());
+            this->debugRawWalkingDirText_->SetText(eastl::string("Original Walking Dir: ") + walkDir.ToString());
+            this->debugWalkingDirText_->SetText(eastl::string("Modified Walking Dir: ") + newWalkDir.ToString());
+            this->debugLadderNormalText_->SetText(eastl::string("Ladder Normal: ") + ladderNormal.ToString());
+#endif // DEBUGGING_LADDER
+
+            return newWalkDir;
         };
 
-        // we must not adjust the pitch if:
-        // 1) we are not even on the ladder at all
-        // 2) we are on the ladder, but at the top facing and trying to walk "inwards"
-        // 3) we are 
-        const Vector3 originalHorizWalkDir = horizRotMat*(usingWasdForWalking ? wasdDir : ijklDir);
-        const float adjustedPitch = adjustPitch(player_, facingDir, originalHorizWalkDir, pitch_);
-        const Matrix3 vertRotMat = Quaternion(Clamp(adjustedPitch, -90.0f, 90.0f), 0.0f, 0.0f).RotationMatrix();
-        const Matrix3 fullRotMat = horizRotMat*vertRotMat;
+        // determine how to use the keys
+        const bool usingWasdForWalking = (cameraMode_ != CameraMode::FreeLook);
+        const Matrix3 horizRotMat = Quaternion(yaw_, Vector3::UP).RotationMatrix();
+        const Matrix3 fullRotMat = Quaternion(pitch_, yaw_, 0.0f).RotationMatrix();
+        const Vector3 originalWalkDir = (usingWasdForWalking ? wasdDir : ijklDir).Normalized();
+        const Vector3 walkDir = player_->IsOnLadder() ? adjustWalkDir(player_, cameraNode_->GetWorldDirection().Normalized(), fullRotMat*originalWalkDir) : horizRotMat*originalWalkDir;
+        const bool wantsJump = input->GetKeyDown(usingWasdForWalking ? KEY_SPACE : KEY_RSHIFT);
 
         if (cameraMode_ == CameraMode::FreeLook)
         {
@@ -272,24 +375,9 @@ public:
                 cameraPos_ += wasdDir.Normalized()*walkDistance;
                 // std::cout << "camera pos: (" << cameraPos_.x_ << "," << cameraPos_.y_ << "," << cameraPos_.z_ << ")" << std::endl;
             }
-
-            // walk separately
-            if (player_->IsOnLadder())
-                ijklDir = fullRotMat*ijklDir;
-            else
-                ijklDir = horizRotMat*ijklDir;
-            player_->SetWalkDirection(ijklDir.Normalized());
-            player_->SetJumping(input->GetKeyDown(KEY_RSHIFT));
         }
-        else
-        {
-            if (player_->IsOnLadder())
-                wasdDir = fullRotMat*wasdDir;
-            else
-                wasdDir = horizRotMat*wasdDir;
-            player_->SetWalkDirection(wasdDir.Normalized());
-            player_->SetJumping(input->GetKeyDown(KEY_SPACE));
-        }
+        player_->SetWalkDirection(walkDir);
+        player_->SetJumping(wantsJump);
 
         // cycle camera mode
         if (input->GetKeyPress(KEY_T))
@@ -409,6 +497,17 @@ protected:
     SharedPtr<Zone> zone_;
     SharedPtr<Camera> camera_;
     SharedPtr<Player> player_;
+#ifdef DEBUGGING_LADDER
+    SharedPtr<Text> debugOnLadderText_;
+    SharedPtr<Text> debugOnGroundText_;
+    SharedPtr<Text> debugLadderCaseText_;
+    SharedPtr<Text> debugNormalPitchText_;
+    SharedPtr<Text> debugDotProductText_;
+    SharedPtr<Text> debugCameraDirText_;
+    SharedPtr<Text> debugRawWalkingDirText_;
+    SharedPtr<Text> debugWalkingDirText_;
+    SharedPtr<Text> debugLadderNormalText_;
+#endif // DEBUGGING_LADDER
     Vector3 cameraPos_;
     float yaw_;
     float pitch_;

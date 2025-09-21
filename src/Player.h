@@ -32,6 +32,7 @@ public:
     bool IsFacingLadder(const Urho3D::Vector3 &faceDir) const;
     bool IsAboveLadderVertically() const;
     bool IsAboveLadderHorizontally() const;
+    Urho3D::Vector3 GetLadderNormal() const;
     Urho3D::Node * GetNode() {return node_;}
     const Urho3D::Node * GetNode() const {return node_;}
 protected:
