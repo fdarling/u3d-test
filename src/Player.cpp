@@ -25,6 +25,8 @@ using Urho3D::RigidBody;
 using Urho3D::CollisionShape;
 using Urho3D::BoundingBox;
 using Urho3D::Color;
+using Urho3D::Clamp;
+using Urho3D::Quaternion;
 using Urho3D::OUTSIDE;
 using Urho3D::E_NODECOLLISIONSTART;
 namespace NodeCollisionStart = Urho3D::NodeCollisionStart;
@@ -36,8 +38,6 @@ Player::Player(Urho3D::Scene *scene, const Urho3D::Vector3 &pos) :
     node_(nullptr),
     walkDir_(Vector3::ZERO),
     ladder_(nullptr),
-    ignoringLadder_(nullptr),
-    ignoringLadderSince_(0),
     onGround_(false),
     wantJump_(false)
 {
@@ -78,6 +78,45 @@ Player::~Player()
     node_ = nullptr;
 }
 
+static Vector3 adjustWalkDir(Player *player, const Vector3 &walkDir)
+{
+    // leave pitch unmodified if we aren't even on a ladder
+    if (!player->IsOnLadder())
+        return walkDir;
+
+    // NOTE: on the ground and trying to leave the ladder case already handled outside this function!
+
+    // check to see if we are at the top of the ladder (maximum altitude)
+    const bool aboveLadderVertically = player->IsAboveLadderVertically();
+    if (aboveLadderVertically)
+    {
+        // are we on top of the ladder (in the sense of it being a platform)?
+        const bool aboveLadderHorizontally = player->IsAboveLadderHorizontally();
+        if (aboveLadderHorizontally)
+            return walkDir;
+
+        // are we walking onto the top of the ladder?
+        const bool walkingTowardsLadder = player->IsFacingLadder(walkDir);
+        if (walkingTowardsLadder)
+            return walkDir;
+    }
+
+    // we are not at the top of the ladder, or we are at the top but
+    // trying to climb down not up
+    const Vector3 ladderNormal = player->GetLadderNormal();
+    const Vector3 rotAxis = ladderNormal.CrossProduct(Vector3::UP);
+    const float normalDot = ladderNormal.DotProduct(walkDir);
+    const Vector3 normalComponent = (ladderNormal*normalDot);
+    if (normalComponent == Vector3::ZERO)
+        return walkDir;
+    const Vector3 verticalComponent = Vector3::UP*(walkDir.DotProduct(Vector3::UP));
+    const float normalPitch = (verticalComponent + normalComponent).Angle(-ladderNormal);
+    const float targetPitch = Clamp(2.0f*(normalPitch - 45.0f), -89.9f, 89.9f);
+    const Vector3 newWalkDir = Quaternion(targetPitch - normalPitch, rotAxis).RotationMatrix()*walkDir;
+
+    return newWalkDir;
+};
+
 struct ContactCallback : public btCollisionWorld::ContactResultCallback
 {
     btScalar addSingleResult(btManifoldPoint& cp, const btCollisionObjectWrapper* colObj0Wrap, int, int, const btCollisionObjectWrapper* colObj1Wrap, int, int) override
@@ -103,22 +142,27 @@ void Player::Advance()
 {
     RigidBody * const body = node_->GetComponent<RigidBody>();
 
+    // test if we are on the ground
     ContactCallback callback;
     body->GetPhysicsWorld()->GetWorld()->contactTest(body->GetBody(), callback);
     onGround_ = callback.onGround;
 
+    // handle special ladder behavior
     if (IsOnLadder())
     {
+        // if we are on the ground and generally walking away from the ladder, depart!
         if (IsOnGround() && walkDir_ != Vector3::ZERO && !IsFacingLadder(walkDir_))
         {
-            ignoringLadder_ = ladder_;
-            ignoringLadderSince_ = Time::GetSystemTime();
-
             // let go of the ladder
             GrabLadder(nullptr);
         }
+
+        // otherwise, commute horizontal "into" / "out-of" the ladder movement into vertical motion
+        const Vector3 adjustedDir = adjustWalkDir(this, flyDir_);
+
+        // when on the ladder, we move at a constant speed (rather than accelerate)
         body->Activate();
-        body->SetLinearVelocity(walkDir_*PLAYER_WALK_SPEED);
+        body->SetLinearVelocity(adjustedDir*PLAYER_WALK_SPEED);
     }
     else if (walkDir_ != Vector3::ZERO)
     {
@@ -139,10 +183,6 @@ void Player::Advance()
         // determine the jump-away direction
         const Vector3 v = ladder_->GetNormalForPoint(node_->GetPosition())*PLAYER_JUMP_VELOCITY;
 
-        // start ignoring this ladder for a small amount of time (so we don't re-grab it)
-        ignoringLadder_ = ladder_;
-        ignoringLadderSince_ = Time::GetSystemTime();
-
         // let go of the ladder
         GrabLadder(nullptr);
 
@@ -159,9 +199,10 @@ void Player::Advance()
     }
 }
 
-void Player::SetWalkDirection(const Urho3D::Vector3 &dir)
+void Player::SetWalkAndFlyDirections(const Urho3D::Vector3 &walkDir, const Urho3D::Vector3 &flyDir)
 {
-    walkDir_ = dir;
+    walkDir_ = walkDir;
+    flyDir_ = flyDir;
 }
 
 void Player::SetJumping(bool en)
@@ -176,7 +217,7 @@ bool Player::IsFacingLadder(const Vector3 &faceDir) const
 
     const Vector3 v = ladder_->GetNormalForPoint(node_->GetPosition());
 
-    return faceDir.DotProduct(v) < 0.0;
+    return faceDir.DotProduct(v) < 0.0f;
 }
 
 static const float OVERLAP_TOLERANCE = 0.05;
@@ -230,8 +271,6 @@ void Player::HandleNodeCollision(Urho3D::StringHash eventType, Urho3D::VariantMa
         if (bodyB->GetBody()->getUserIndex() == PhysicsUserIndex::Ladder)
         {
             Ladder * const ladder = reinterpret_cast<Ladder*>(nodeB->GetVar("GameObjectPtr").GetVoidPtr());
-            if (ladder == ignoringLadder_ && (Time::GetSystemTime() - ignoringLadderSince_ < IGNORING_LADDER_TIMEOUT_MS))
-                return;
             GrabLadder(ladder);
         }
     }

@@ -25,7 +25,7 @@ public:
     ~Player();
 
     void Advance();
-    void SetWalkDirection(const Urho3D::Vector3 &dir);
+    void SetWalkAndFlyDirections(const Urho3D::Vector3 &walkDir, const Urho3D::Vector3 &flyDir);
     void SetJumping(bool en);
     bool IsOnLadder() const {return ladder_;}
     bool IsOnGround() const {return onGround_;}
@@ -43,9 +43,8 @@ protected:
 
     Urho3D::Node *node_;
     Urho3D::Vector3 walkDir_;
+    Urho3D::Vector3 flyDir_;
     Ladder *ladder_;
-    Ladder *ignoringLadder_;
-    unsigned ignoringLadderSince_;
     bool onGround_;
     bool wantJump_;
 };
