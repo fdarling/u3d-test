@@ -69,7 +69,7 @@ Player::Player(Urho3D::Scene *scene, const Urho3D::Vector3 &pos) :
     btRigidBody * const bulletBody = body->GetBody();
     bulletBody->setUserIndex(PhysicsUserIndex::Player);
 
-    SubscribeToEvent(node_, E_NODECOLLISIONSTART, URHO3D_HANDLER(Player, HandleNodeCollision));
+    SubscribeToEvent(node_, E_NODECOLLISIONSTART, URHO3D_HANDLER(Player, HandleNodeCollisionStart));
 }
 
 Player::~Player()
@@ -260,9 +260,7 @@ Urho3D::Vector3 Player::GetLadderNormal() const
     return ladder_->GetNormalForPoint(node_->GetPosition());
 }
 
-static const unsigned IGNORING_LADDER_TIMEOUT_MS = 200;
-
-void Player::HandleNodeCollision(Urho3D::StringHash eventType, Urho3D::VariantMap &eventData)
+void Player::HandleNodeCollisionStart(Urho3D::StringHash eventType, Urho3D::VariantMap &eventData)
 {
     Node * const nodeB = static_cast<Node*>(eventData[NodeCollisionStart::P_OTHERNODE].GetPtr());
     RigidBody * const bodyB = static_cast<RigidBody*>(eventData[NodeCollisionStart::P_OTHERBODY].GetPtr());

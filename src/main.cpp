@@ -34,8 +34,44 @@
 #include "globals.h"
 
 #include <Urho3D/ThirdParty/Bullet/BulletDynamics/Dynamics/btRigidBody.h>
+#include <Urho3D/ThirdParty/Bullet/BulletCollision/NarrowPhaseCollision/btManifoldPoint.h>
+#include <Urho3D/ThirdParty/Bullet/BulletCollision/NarrowPhaseCollision/btPersistentManifold.h>
 
 using namespace Urho3D;
+
+static bool myContactProcessedCallback(btManifoldPoint &cp, void *vbody0, void *vbody1)
+{
+    btCollisionObject * const obj0 = static_cast<btCollisionObject*>(vbody0);
+    btCollisionObject * const obj1 = static_cast<btCollisionObject*>(vbody1);
+    // RigidBody * const rigidBodyA = reinterpret_cast<RigidBody*>(obj0->getUserPointer());
+    // RigidBody * const rigidBodyB = reinterpret_cast<RigidBody*>(obj1->getUserPointer());
+    // if (!rigidBodyA || !rigidBodyB)
+        // return true;
+
+    btRigidBody * player = nullptr;
+    if (obj0->getUserIndex() == PhysicsUserIndex::Player)
+    {
+        player = dynamic_cast<btRigidBody*>(obj1);
+    }
+    else if (obj1->getUserIndex() == PhysicsUserIndex::Player)
+    {
+        player = dynamic_cast<btRigidBody*>(obj0);
+    }
+    if (player)
+    {
+        const btVector3 contactNormal = cp.m_normalWorldOnB;
+        const btScalar verticalComponent = contactNormal.dot(btVector3(0, 1, 0));
+        const btVector3 vel = player->getLinearVelocity();
+
+        if (std::abs(verticalComponent) < 0.4f)
+        {
+            // This is a mostly horizontal contact (wall) — reduce friction
+            cp.m_combinedFriction = 0.0f;
+        }
+    }
+
+    return true;
+}
 
 class MyApp : public Application
 {
@@ -74,6 +110,13 @@ public:
         physicsWorld_ = scene_->CreateComponent<PhysicsWorld>();
         // physicsWorld_->SetMaxSubSteps(10); // default is 0 for unlimited
         // physicsWorld_->SetFps(240); // default is 60
+        // global Bullet physics callbacks
+        {
+            // gContactAddedCallback = myContactAddedCallback; // used by Urho3D
+            // gContactStartedCallback = myContactStartedCallback;
+            // gContactEndedCallback = myContactEndedCallback;
+            gContactProcessedCallback = myContactProcessedCallback;
+        }
         DebugRenderer * const debugRenderer = scene_->CreateComponent<DebugRenderer>();
         zone_ = scene_->CreateComponent<Zone>();
         zone_->SetBoundingBox(BoundingBox(-1000.0f, 1000.0f));
