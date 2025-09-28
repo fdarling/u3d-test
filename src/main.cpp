@@ -28,14 +28,12 @@
 #include "VectorShim.h"
 #include "SceneLoader.h"
 #include "Player.h"
-#include "JumpPad.h"
-#include "Ladder.h"
 #include "Ball.h"
 #include "globals.h"
 
 #include <Urho3D/ThirdParty/Bullet/BulletDynamics/Dynamics/btRigidBody.h>
 #include <Urho3D/ThirdParty/Bullet/BulletCollision/NarrowPhaseCollision/btManifoldPoint.h>
-#include <Urho3D/ThirdParty/Bullet/BulletCollision/NarrowPhaseCollision/btPersistentManifold.h>
+#include <Urho3D/ThirdParty/Bullet/BulletCollision/NarrowPhaseCollision/btPersistentManifold.h> // for gContactProcessedCallback
 
 using namespace Urho3D;
 
@@ -84,7 +82,7 @@ public:
         pitch_(0.0f),
         cameraMode_(CameraMode::ThirdPerson),
         drawDebug_(false),
-        drawPhysicsDebug_(true),
+        drawPhysicsDebug_(false),
         shadowsEnabled_(true),
         ssaoEnabled_(true)
     {
@@ -164,19 +162,6 @@ public:
 
         // TODO store pointers, we are leaking these object currently!
         player_ = new Player(scene_, Vector3(6, PLAYER_HEIGHT/2.0+0.01, 0));
-        JumpPad * const jumpPad = new JumpPad(scene_, Vector3(2.0, 0.25, 0.0), Vector3(2.0, 0.5, 2.0));
-        Ladder * const ladder = new Ladder(scene_, Vector3(4.0, 8.0, 4.0), Vector3(2.0, 16.0, 2.0));
-
-        // stick a ball to the ladder
-        {
-            Ball * const redBall = new Ball(scene_, Vector3(4.0, 8.0, 4.0) + Vector3(1.25, 0.0, 0.0), Vector3::ZERO, Color(1.0, 0.0, 0.0));
-            redBall->GetNode()->GetComponent<RigidBody>()->SetUseGravity(false);
-            ladder->ConstrainNode(redBall->GetNode());
-
-            // test removing the constraint
-            // ladder->UnconstrainNode(redBall->GetNode());
-            // redBall->GetNode()->GetComponent<RigidBody>()->SetUseGravity(true);
-        }
 
         // Camera
         cameraNode_ = scene_->CreateChild("Camera");

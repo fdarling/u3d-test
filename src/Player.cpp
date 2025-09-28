@@ -169,7 +169,7 @@ void Player::Advance()
         const Vector3 currentVelocity = body->GetLinearVelocity();
         const float mass = body->GetMass();
         const float speedInDesiredDirection = currentVelocity.DotProduct(walkDir_);
-        const float walk_accel = PLAYER_WALK_ACCEL*std::max(0.0, std::min(1.0, 1.0 - speedInDesiredDirection/PLAYER_WALK_SPEED));
+        const float walk_accel = PLAYER_WALK_ACCEL*Clamp(1.0 - speedInDesiredDirection/PLAYER_WALK_SPEED, 0.0, 1.0);
         const Vector3 force = mass*walk_accel*walkDir_;
         if (force != Vector3::ZERO)
         {

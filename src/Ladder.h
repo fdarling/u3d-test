@@ -18,7 +18,7 @@ class btGeneric6DofConstraint;
 class Ladder
 {
 public:
-    Ladder(Urho3D::Scene *scene, const Urho3D::Vector3 &pos, const Urho3D::Vector3 &size);
+    Ladder(Urho3D::Node *node);
     ~Ladder();
 
     Urho3D::Vector3 GetNormalForPoint(const Urho3D::Vector3 &pt) const;

@@ -6,7 +6,6 @@
 // forward declarations
 namespace Urho3D {
 
-class Scene;
 class Node;
 class Vector3;
 class StringHash;
@@ -17,7 +16,7 @@ class JumpPad : public Urho3D::Object
 {
     URHO3D_OBJECT(JumpPad, Urho3D::Object);
 public:
-    JumpPad(Urho3D::Scene *scene, const Urho3D::Vector3 &pos, const Urho3D::Vector3 &size);
+    JumpPad(Urho3D::Node *node);
     ~JumpPad();
 protected:
     void HandleNodeCollision(Urho3D::StringHash eventType, Urho3D::VariantMap &eventData);

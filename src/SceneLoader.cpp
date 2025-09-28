@@ -19,9 +19,13 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
+#include "JumpPad.h"
+#include "Ladder.h"
+
 // #include <iostream>
 #include <vector>
 #include <string>
+#include <cstring>
 
 #ifdef USING_RBFX
 typedef ea::string String;
@@ -307,6 +311,31 @@ static void processAssimpNode(const aiNode* ai_node, const aiScene* ai_scene, No
         body->SetMass(0.0f); // Static body
         CollisionShape* shape = currentNode->CreateComponent<CollisionShape>();
         shape->SetTriangleMesh(model);
+    }
+    
+    // check for custom game object type
+    if (const aiMetadata * const metadata = ai_node->mMetaData)
+    {
+        for (unsigned int i = 0; i < metadata->mNumProperties; ++i)
+        {
+            const std::string key = metadata->mKeys[i].C_Str();
+            const aiMetadataEntry &entry = metadata->mValues[i];
+
+            if (key == "GameObjectType" && entry.mType == AI_AISTRING)
+            {
+                const aiString * const val = static_cast<const aiString*>(entry.mData);
+                const char * const type = val->C_Str();
+                // TODO store pointers, we are leaking these object currently!
+                if (strcmp(type, "JumpPad") == 0)
+                {
+                    JumpPad * const jumpPad = new JumpPad(currentNode);
+                }
+                else if (strcmp(type, "Ladder") == 0)
+                {
+                    Ladder * const ladder = new Ladder(currentNode);
+                }
+            }
+        }
     }
 
     AddText3DLabel(currentNode, ai_node->mName.C_Str());

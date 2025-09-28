@@ -2,10 +2,12 @@
 #include "globals.h"
 
 #include <Urho3D/Scene/Scene.h>
+#include <Urho3D/Physics/PhysicsUtils.h>
 #include <Urho3D/Physics/PhysicsWorld.h>
 #include <Urho3D/Physics/RigidBody.h>
 #include <Urho3D/Physics/CollisionShape.h>
 
+#include <Urho3D/ThirdParty/Bullet/BulletCollision/CollisionShapes/btCollisionShape.h>
 #include <Urho3D/ThirdParty/Bullet/BulletDynamics/Dynamics/btDiscreteDynamicsWorld.h>
 #include <Urho3D/ThirdParty/Bullet/BulletDynamics/Dynamics/btRigidBody.h>
 #include <Urho3D/ThirdParty/Bullet/BulletDynamics/ConstraintSolver/btGeneric6DofConstraint.h>
@@ -15,20 +17,15 @@
 #include <limits> // for std::numeric_limits<>
 
 using Urho3D::Vector3;
+using Urho3D::BoundingBox;
 using Urho3D::RigidBody;
 using Urho3D::CollisionShape;
+using Urho3D::ToBtVector3;
 
-Ladder::Ladder(Urho3D::Scene *scene, const Urho3D::Vector3 &pos, const Urho3D::Vector3 &size) :
-    node_(nullptr),
-    body_(nullptr)
+Ladder::Ladder(Urho3D::Node *node) :
+    node_(node),
+    body_(node_->GetComponent<RigidBody>())
 {
-    node_ = scene->CreateChild("Ladder");
-    node_->SetPosition(pos);
-
-    body_ = node_->CreateComponent<RigidBody>();
-    CollisionShape * const ladderShape = node_->CreateComponent<CollisionShape>();
-    ladderShape->SetBox(size);
-
     btRigidBody * const body = body_->GetBody();
     body->setUserIndex(PhysicsUserIndex::Ladder);
     node_->SetVar("GameObjectPtr", this);
@@ -72,6 +69,17 @@ Vector3 Ladder::GetNormalForPoint(const Urho3D::Vector3 &pt) const
     return CARDINAL_DIRECTIONS[bestIndex];
 }
 
+static Urho3D::BoundingBox GetLocalAABB(Urho3D::CollisionShape *collisionShape)
+{
+    btCollisionShape * const shape = collisionShape->GetCollisionShape();
+    btTransform localTransform;
+    localTransform.setIdentity();
+    btVector3 aabbMin;
+    btVector3 aabbMax;
+    shape->getAabb(localTransform, aabbMin, aabbMax);
+    return BoundingBox(Vector3(aabbMin), Vector3(aabbMax));
+}
+
 void Ladder::ConstrainNode(Urho3D::Node *otherNode)
 {
     // make sure we didn't already constrain it
@@ -103,9 +111,12 @@ void Ladder::ConstrainNode(Urho3D::Node *otherNode)
     );
 
     // partial XYZ volume around "ladder"
-    // TODO use node_->GetComponent<CollisionShape>()->Size()
-    constraint->setLinearLowerLimit(btVector3(-1.0 - PLAYER_RADIUS, -8 - PLAYER_HEIGHT/2.0, -1.0 - PLAYER_RADIUS));
-    constraint->setLinearUpperLimit(btVector3( 1.0 + PLAYER_RADIUS,  8 + PLAYER_HEIGHT/2.0,  1.0 + PLAYER_RADIUS));
+    const Vector3 v = node_->GetScale()*node_->GetComponent<CollisionShape>()->GetSize()/2.0f;
+    const BoundingBox shapeBB = GetLocalAABB(node_->GetComponent<CollisionShape>());
+    static const btScalar TOLERANCE = 0.05;
+    const btVector3 expansion3D = btVector3(PLAYER_RADIUS + TOLERANCE, PLAYER_HEIGHT/2.0 + TOLERANCE, PLAYER_RADIUS + TOLERANCE);
+    constraint->setLinearLowerLimit(ToBtVector3(shapeBB.min_) - expansion3D);
+    constraint->setLinearUpperLimit(ToBtVector3(shapeBB.max_) + expansion3D);
 
     // only allow rotation about the Z axis
     // constraint->setAngularLowerLimit(btVector3(0, -SIMD_INFINITY, 0));
