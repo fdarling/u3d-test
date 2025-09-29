@@ -11,6 +11,8 @@ include(UrhoCommon)
 # find_package (Urho3D REQUIRED) # NOTE: done implicitly by the above inclusion
 find_package(assimp REQUIRED)
 
+set(CMAKE_CXX_STANDARD 17) # setting again because UrhoCommon overrode it!
+
 include_directories(
     ${URHO3D_INCLUDE_DIRS}
     src

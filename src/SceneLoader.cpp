@@ -17,6 +17,7 @@
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
+#include <assimp/metadata.h>
 #include <assimp/postprocess.h>
 
 #include "JumpPad.h"
@@ -25,6 +26,7 @@
 // #include <iostream>
 #include <vector>
 #include <string>
+#include <string_view>
 #include <cstring>
 
 #ifdef USING_RBFX
@@ -234,6 +236,27 @@ static Node* AddText3DLabel(Node* targetNode, const String& text, const Color& c
     return labelNode;
 }
 
+float ReadNumber(const aiMetadataEntry * const entry, bool *ok = nullptr)
+{
+    bool resultOk = true;
+    float result = 0.0f;
+    switch (entry->mType)
+    {
+        case AI_INT32: result = *static_cast<const int32_t *>(entry->mData); break;
+        case AI_UINT64: result = *static_cast<const uint64_t *>(entry->mData); break;
+        case AI_FLOAT: result = *static_cast<const float *>(entry->mData); break;
+        case AI_DOUBLE: result = *static_cast<const double *>(entry->mData); break;
+        // case AI_INT64: result = *static_cast<const int64_t *>(entry->mData); break;
+        // case AI_UINT32: result = *static_cast<const uint32_t *>(entry->mData); break;
+        default:
+        resultOk = false;
+        break;
+    }
+    if (ok)
+        *ok = resultOk;
+    return result;
+}
+
 static void processAssimpNode(const aiNode* ai_node, const aiScene* ai_scene, Node* parentNode, Context *context)
 {
     /*
@@ -267,6 +290,57 @@ static void processAssimpNode(const aiNode* ai_node, const aiScene* ai_scene, No
         currentNode->SetPosition(translate);
         currentNode->SetRotation(orient);
         currentNode->SetScale(scale);
+    }
+
+    float rigidBodyMass = 0.0f;
+    if (ai_node->mMetaData)
+    {
+        for (unsigned int i = 0; i < ai_node->mMetaData->mNumProperties; i++)
+        {
+            // std::cout << "property #" << i << ": \"" << ai_node->mMetaData->mKeys[i].C_Str() << "\": type " << ai_node->mMetaData->mValues[i].mType << "" << std::endl;
+            // find extensions entry
+            if (ai_node->mMetaData->mValues[i].mType == AI_AIMETADATA && strcmp(ai_node->mMetaData->mKeys[i].C_Str(), "extensions") == 0)
+            {
+                // std::cout << "Found \"extensions\"!" << std::endl;
+                const aiMetadata * const extensions = static_cast<const aiMetadata *>(ai_node->mMetaData->mValues[i].mData);
+                for (unsigned int j = 0; j < extensions->mNumProperties; j++)
+                {
+                    // std::cout << "\tproperty #" << j << ": \"" << extensions->mKeys[j].C_Str() << "\": type " << extensions->mValues[j].mType << "" << std::endl;
+                    // find KHR_physics_rigid_bodies entry
+                    if (extensions->mValues[j].mType == AI_AIMETADATA && strcmp(extensions->mKeys[j].C_Str(), "KHR_physics_rigid_bodies") == 0)
+                    {
+                        // std::cout << "\tFound \"KHR_physics_rigid_bodies\"!" << std::endl;
+                        const aiMetadata * const rigid_body_metadata = static_cast<const aiMetadata *>(extensions->mValues[j].mData);
+                        for (unsigned int k = 0; k < rigid_body_metadata->mNumProperties; k++)
+                        {
+                            // std::cout << "\t\tproperty #" << k << ": \"" << rigid_body_metadata->mKeys[k].C_Str() << "\": type " << rigid_body_metadata->mValues[k].mType << "" << std::endl;
+                            // find motion entry
+                            if (rigid_body_metadata->mValues[k].mType == AI_AIMETADATA && strcmp(rigid_body_metadata->mKeys[k].C_Str(), "motion") == 0)
+                            {
+                                // std::cout << "\t\tFound \"motion\"!" << std::endl;
+                                const aiMetadata * const motion_metadata = static_cast<const aiMetadata *>(rigid_body_metadata->mValues[k].mData);
+                                for (unsigned int l = 0; l < motion_metadata->mNumProperties; l++)
+                                {
+                                    // std::cout << "\t\t\tproperty #" << l << ": \"" << motion_metadata->mKeys[l].C_Str() << "\": type " << motion_metadata->mValues[l].mType << "" << std::endl;
+                                    if (strcmp(motion_metadata->mKeys[l].C_Str(), "mass") == 0)
+                                    {
+                                        // std::cout << "\t\t\tFound \"mass\"!" << std::endl;
+                                        bool ok = false;
+                                        rigidBodyMass = ReadNumber(motion_metadata->mValues + l, &ok);
+                                        if (!ok)
+                                        {
+                                            // std::cout << "UNKNOWN TYPE! " << motion_metadata->mValues[l].mType << std::endl;
+                                            continue;
+                                        }
+                                        // std::cout << "\t\t\t\tmass: " << mass << std::endl;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // TODO cache models
@@ -307,18 +381,23 @@ static void processAssimpNode(const aiNode* ai_node, const aiScene* ai_scene, No
         }
 
         // create physics body
-        RigidBody* body = currentNode->CreateComponent<RigidBody>();
-        body->SetMass(0.0f); // Static body
-        CollisionShape* shape = currentNode->CreateComponent<CollisionShape>();
-        shape->SetTriangleMesh(model);
+        RigidBody * const body = currentNode->CreateComponent<RigidBody>();
+        body->SetMass(rigidBodyMass); // defaults to 0.0 which means a static body
+
+        // create physics shape
+        CollisionShape * const shape = currentNode->CreateComponent<CollisionShape>();
+        if (rigidBodyMass == 0.0f)
+            shape->SetTriangleMesh(model); // for static bodies, we can use non-convex geometry
+        else
+            shape->SetConvexHull(model); // for dynamic bodies, the geometry must be convex!
     }
-    
+
     // check for custom game object type
     if (const aiMetadata * const metadata = ai_node->mMetaData)
     {
         for (unsigned int i = 0; i < metadata->mNumProperties; ++i)
         {
-            const std::string key = metadata->mKeys[i].C_Str();
+            const std::string_view key = metadata->mKeys[i].C_Str();
             const aiMetadataEntry &entry = metadata->mValues[i];
 
             if (key == "GameObjectType" && entry.mType == AI_AISTRING)
