@@ -10,6 +10,6 @@ class Context;
 
 } // namespace Urho3D
 
-void loadSceneWithAssimp(const std::string& filename, Urho3D::Node* sceneMgr, Urho3D::Context* context);
+void loadSceneWithAssimp(const std::string &filename, Urho3D::Node *sceneMgr, Urho3D::Context *context);
 
 #endif // SCENELOADER_H

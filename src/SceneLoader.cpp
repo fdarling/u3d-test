@@ -20,6 +20,7 @@
 #include <assimp/metadata.h>
 #include <assimp/postprocess.h>
 
+#include "CreateMaterial.h"
 #include "JumpPad.h"
 #include "Ladder.h"
 
@@ -35,16 +36,16 @@ typedef ea::string String;
 
 using namespace Urho3D;
 
-static void processAssimpLights(const aiScene* ai_scene, Node* parentNode)
+static void processAssimpLights(const aiScene * const ai_scene, Node * const parentNode)
 {
     for (unsigned int i = 0; i < ai_scene->mNumLights; ++i)
     {
-        aiLight* ai_light = ai_scene->mLights[i];
+        aiLight * const ai_light = ai_scene->mLights[i];
         Node *realParentNode = parentNode->GetChild(ai_light->mName.C_Str(), true);
         if (!realParentNode)
             realParentNode = parentNode;
-        Node* lightNode = realParentNode->CreateChild(ai_light->mName.C_Str());
-        Light* light = lightNode->CreateComponent<Light>();
+        Node * const lightNode = realParentNode->CreateChild(ai_light->mName.C_Str());
+        Light * const light = lightNode->CreateComponent<Light>();
 
         if (ai_light->mType == aiLightSource_POINT)
         {
@@ -153,7 +154,7 @@ static SharedPtr<Model> loadModel(const aiMesh * const ai_mesh, Context * const 
     indexData.reserve(indexCount);
     for (unsigned j = 0; j < ai_mesh->mNumFaces; ++j)
     {
-        aiFace& face = ai_mesh->mFaces[j];
+        const aiFace &face = ai_mesh->mFaces[j];
         indexData.push_back(face.mIndices[0]);
         indexData.push_back(face.mIndices[1]);
         indexData.push_back(face.mIndices[2]);
@@ -184,17 +185,17 @@ static SharedPtr<Model> loadModel(const aiMesh * const ai_mesh, Context * const 
     return model;
 }
 
-static Node* AddText3DLabel(Node* targetNode, const String& text, const Color& color = Color::WHITE, float offsetY = 2.5f, float fontSize = 24.0f)
+static Node* AddText3DLabel(Node * const targetNode, const String &text, const Color &color = Color::WHITE, float offsetY = 2.5f, float fontSize = 24.0f)
 {
-    Context* context = targetNode->GetContext();
-    ResourceCache* cache = context->GetSubsystem<ResourceCache>();
+    Context * const context = targetNode->GetContext();
+    ResourceCache * const cache = context->GetSubsystem<ResourceCache>();
 
     // Create a child node for the label
-    Node* labelNode = targetNode->CreateChild("Text3DLabel");
+    Node * const labelNode = targetNode->CreateChild("Text3DLabel");
 
     // Position above the target node
     Vector3 position = Vector3::ZERO;
-    StaticModel* sm = targetNode->GetComponent<StaticModel>();
+    StaticModel * const sm = targetNode->GetComponent<StaticModel>();
     if (sm && sm->GetModel())
     {
         BoundingBox bb = sm->GetModel()->GetBoundingBox();
@@ -208,7 +209,7 @@ static Node* AddText3DLabel(Node* targetNode, const String& text, const Color& c
     labelNode->SetWorldScale(Vector3::ONE);
 
     // Create Text3D component
-    Text3D* text3D = labelNode->CreateComponent<Text3D>();
+    Text3D * const text3D = labelNode->CreateComponent<Text3D>();
 
     // Load font (use default Urho3D font or custom)
     Font *font = cache->GetResource<Font>("Fonts/Anonymous Pro.ttf");
@@ -257,7 +258,7 @@ float ReadNumber(const aiMetadataEntry * const entry, bool *ok = nullptr)
     return result;
 }
 
-static void processAssimpNode(const aiNode* ai_node, const aiScene* ai_scene, Node* parentNode, Context *context)
+static void processAssimpNode(const aiNode * const ai_node, const aiScene * const ai_scene, Node * const parentNode, Context * const context)
 {
     /*
     Node* currentNode = parent->CreateChild(ai_node->mName.C_Str());
@@ -348,7 +349,7 @@ static void processAssimpNode(const aiNode* ai_node, const aiScene* ai_scene, No
 
     for (unsigned int i = 0; i < ai_node->mNumMeshes; ++i)
     {
-        const auto meshIndex = ai_node->mMeshes[i];
+        const unsigned int meshIndex = ai_node->mMeshes[i];
         const aiMesh * const ai_mesh = ai_scene->mMeshes[meshIndex];
 
         // load mesh
@@ -356,15 +357,14 @@ static void processAssimpNode(const aiNode* ai_node, const aiScene* ai_scene, No
         // models[i] = model;
 
         // apply mesh
-        StaticModel* sm = currentNode->CreateComponent<StaticModel>();
+        StaticModel * const sm = currentNode->CreateComponent<StaticModel>();
         sm->SetModel(model);
         sm->SetCastShadows(true);
 
         // apply material
-        const auto materialIndex = ai_mesh->mMaterialIndex;
-        if (materialIndex < ai_scene->mNumMaterials)
+        if (ai_mesh->mMaterialIndex < ai_scene->mNumMaterials)
         {
-            aiMaterial * const ai_mat = ai_scene->mMaterials[materialIndex];
+            aiMaterial * const ai_mat = ai_scene->mMaterials[ai_mesh->mMaterialIndex];
             aiColor4D diffuseColor;
             if (AI_SUCCESS != aiGetMaterialColor(ai_mat, AI_MATKEY_BASE_COLOR, &diffuseColor))
             {
@@ -372,11 +372,7 @@ static void processAssimpNode(const aiNode* ai_node, const aiScene* ai_scene, No
                 aiGetMaterialColor(ai_mat, AI_MATKEY_COLOR_DIFFUSE, &diffuseColor);
             }
 
-            SharedPtr<Material> mat(new Material(context));
-            mat->SetTechnique(0, context->GetSubsystem<ResourceCache>()->GetResource<Technique>("Techniques/NoTextureAO.xml"));
-            mat->SetShaderParameter("MatDiffColor", Color(diffuseColor.r, diffuseColor.g, diffuseColor.b));
-            // mat->SetShadowCullMode(CULL_CW);
-
+            SharedPtr<Material> mat = CreateMaterial(context, Color(diffuseColor.r, diffuseColor.g, diffuseColor.b));
             sm->SetMaterial(mat);
         }
 
@@ -424,10 +420,10 @@ static void processAssimpNode(const aiNode* ai_node, const aiScene* ai_scene, No
         processAssimpNode(ai_node->mChildren[i], ai_scene, currentNode, context);
 }
 
-void loadSceneWithAssimp(const std::string& filename, Node* parentNode, Context* context)
+void loadSceneWithAssimp(const std::string &filename, Node *parentNode, Context *context)
 {
     Assimp::Importer importer;
-    const aiScene* ai_scene = importer.ReadFile(filename,
+    const aiScene * const ai_scene = importer.ReadFile(filename,
         aiProcess_Triangulate |
         aiProcess_GenSmoothNormals |
         aiProcess_JoinIdenticalVertices |
