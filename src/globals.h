@@ -16,7 +16,8 @@ enum Enum
     None,
     Player,
     JumpPad,
-    Ladder
+    Ladder,
+    Elevator
 };
 
 } // namespace PhysicsUserIndex

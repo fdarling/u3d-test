@@ -21,8 +21,10 @@
 #include <assimp/postprocess.h>
 
 #include "CreateMaterial.h"
+#include "KinematicRigidBody.h"
 #include "JumpPad.h"
 #include "Ladder.h"
+#include "Elevator.h"
 
 // #include <iostream>
 #include <vector>
@@ -377,7 +379,22 @@ static void processAssimpNode(const aiNode * const ai_node, const aiScene * cons
         }
 
         // create physics body
-        RigidBody * const body = currentNode->CreateComponent<RigidBody>();
+        RigidBody *body = nullptr;
+        if (strcmp(ai_node->mName.C_Str(), "Elevator") == 0)
+        {
+            // NOTE: we cannot use currentNode->CreateComponent<KinematicRigidBody>()
+            // for two reasons: RigidBody is explicitly sought by PhyicsWorld and
+            // friends, and we are making an imposter RigidBody via KinematicRigidBody
+            // not being registered "properly" with omitting the URHO3D_OBJECT macro
+            body = new KinematicRigidBody(context);
+#ifdef USING_RBFX
+            currentNode->AddComponent(body, 0);
+#else
+            currentNode->AddComponent(body, 0, Urho3D::REPLICATED);
+#endif
+        }
+        else
+            body= currentNode->CreateComponent<RigidBody>();
         body->SetMass(rigidBodyMass); // defaults to 0.0 which means a static body
 
         // create physics shape
@@ -408,6 +425,10 @@ static void processAssimpNode(const aiNode * const ai_node, const aiScene * cons
                 else if (strcmp(type, "Ladder") == 0)
                 {
                     Ladder * const ladder = new Ladder(currentNode);
+                }
+                else if (strcmp(type, "Elevator") == 0)
+                {
+                    Elevator * const elevator = new Elevator(currentNode);
                 }
             }
         }
