@@ -28,15 +28,16 @@ namespace PhysicsPreStep = Urho3D::PhysicsPreStep;
 namespace BeginFrame = Urho3D::BeginFrame;
 namespace NodeCollisionStart = Urho3D::NodeCollisionStart;
 
+static const float DEST_COOLDOWN = 2.0;
+static const float MAX_ELEVATOR_TRAVEL = 40.0f;
 static const float ELEVATOR_SPEED = 5.0f;
-// static const Vector3 ELEVATOR_VEL = Vector3::UP*ELEVATOR_SPEED; // with U3D (not rbfx), this evaluates to Urho3D::Vector3::ZERO somehow... maybe a static global variable initialization order issue?
-static const Vector3 ELEVATOR_VEL = Vector3(0, 1, 0)*ELEVATOR_SPEED;
 
 Elevator::Elevator(Urho3D::Node *node) :
     Urho3D::Object(node->GetContext()),
     node_(node),
-    _elevating(false),
-    _accumulator(0.0)
+    _state(State::Idle),
+    _accumulator(0.0),
+    _cooldown(0.0)
 {
     RigidBody * const rigidBody = node_->GetComponent<RigidBody>();
     rigidBody->getWorldTransform(_oldTransform);
@@ -47,6 +48,7 @@ Elevator::Elevator(Urho3D::Node *node) :
     bulletBody->setUserIndex(PhysicsUserIndex::Elevator);
 
     PhysicsWorld * const world = node_->GetScene()->GetComponent<PhysicsWorld>();
+    // TODO call SubscribeToEvent() and UnsubscribeFromEvent() as needed so they aren't always firing
     SubscribeToEvent(E_POSTUPDATE, URHO3D_HANDLER(Elevator, HandlePostUpdate));
     // SubscribeToEvent(world, E_PHYSICSPREUPDATE, URHO3D_HANDLER(Elevator, HandlePhysicsPreUpdate));
     // SubscribeToEvent(world, E_PHYSICSPOSTUPDATE, URHO3D_HANDLER(Elevator, HandlePhysicsPostUpdate));
@@ -64,11 +66,11 @@ Elevator::~Elevator()
 void Elevator::HandlePostUpdate(Urho3D::StringHash eventType, Urho3D::VariantMap &eventData)
 {
     // std::cout << "Elevator::HandlePostUpdate" << std::endl;
-    if (_elevating)
+    if (_state != State::Idle)
     {
         _accumulator += eventData[PostUpdate::P_TIMESTEP].GetFloat();
 
-        // interpolate from physics pose to graphics pose
+        // interpolate graphics version of transform using old physics transform and velocity/rotation
         KinematicRigidBody * const ourBody = static_cast<KinematicRigidBody*>(node_->GetComponent<RigidBody>());
         btRigidBody * const body = ourBody->GetBody();
         btTransform interpolatedTrans;
@@ -79,12 +81,10 @@ void Elevator::HandlePostUpdate(Urho3D::StringHash eventType, Urho3D::VariantMap
         const Quaternion interpolatedRotation = ToQuaternion(interpolatedTrans.getRotation());
         const Vector3 interpolatedPosition = ToVector3(interpolatedTrans.getOrigin()) - interpolatedRotation * ourBody->GetCenterOfMass();
 
-        // update the pose that is *only used by graphics*!
+        // update the transform used by the graphics system
         ourBody->GetPhysicsWorld()->SetApplyingTransforms(true);
         node_->SetWorldPosition(interpolatedPosition);
         node_->SetWorldRotation(interpolatedRotation);
-        // lastPosition_ = node_->GetWorldPosition();
-        // lastRotation_ = node_->GetWorldRotation();
         ourBody->GetPhysicsWorld()->SetApplyingTransforms(false);
     }
 }
@@ -92,32 +92,60 @@ void Elevator::HandlePostUpdate(Urho3D::StringHash eventType, Urho3D::VariantMap
 void Elevator::HandlePhysicsPreStep(Urho3D::StringHash eventType, Urho3D::VariantMap &eventData)
 {
     // std::cout << "HandlePhysicsPreStep" << std::endl;
-    if (_elevating)
+    if (_state != State::Idle)
     {
         const float timeStep = eventData[PhysicsPreStep::P_TIMESTEP].GetFloat();
         _accumulator -= timeStep;
 
         KinematicRigidBody * const ourBody = static_cast<KinematicRigidBody*>(node_->GetComponent<RigidBody>());
+
+        // save current (will become "old") physics transform for graphics interpolation purposes
         ourBody->getWorldTransform(_oldTransform); // we save this for interpolation purposes
 
-        ////// const Vector3 pos = ourBody->GetPosition();
-        // const Quaternion rot = ToQuaternion(_oldTransform.getRotation());
-        // const Vector3 pos = ToVector3(_oldTransform.getOrigin()) - rot * ourBody->GetCenterOfMass();
-        // const Vector3 newPos = pos + ELEVATOR_VEL*timeStep;
-        // const Vector3 vel = ourBody->GetLinearVelocity();
+        if (_state == State::Departing || _state == State::Returning)
+        {
+            // calculate the direction of motion and velocity
+            const Vector3 startToEndVec = Vector3(_endTrans.getOrigin() - _startTrans.getOrigin()).Normalized();
+            Vector3 newVel = ((_state == State::Departing) ? startToEndVec : -startToEndVec)*ELEVATOR_SPEED;
 
-        btTransform newPhysicsTrans;
-        newPhysicsTrans.setIdentity();
-        //// newPhysicsTrans.setOrigin(ToBtVector3(newPos + rot * ourBody->GetCenterOfMass()));
-        //// newPhysicsTrans.setRotation(ToBtQuaternion(rot));
-        newPhysicsTrans.setOrigin(_oldTransform.getOrigin() + ToBtVector3(ELEVATOR_VEL)*timeStep);
-        newPhysicsTrans.setRotation(_oldTransform.getRotation());
-        
-        // update the pose that is *only used by graphics*!
-        ourBody->setOverrideTransform(newPhysicsTrans);
-        // update the rest of the physics state
-        ourBody->Activate();
-        ourBody->SetLinearVelocity(ELEVATOR_VEL);
+            // calculate new physics transform
+            btTransform newPhysicsTrans;
+            newPhysicsTrans.setIdentity();
+            newPhysicsTrans.setOrigin(_oldTransform.getOrigin() + ToBtVector3(newVel)*timeStep);
+            newPhysicsTrans.setRotation(_oldTransform.getRotation());
+
+            // cap the velocity / target position to not overshoot
+            const btTransform &targetTrans = (_state == State::Departing) ? _endTrans : _startTrans;
+            const btScalar targetRelativeY = (newPhysicsTrans.getOrigin().y() - targetTrans.getOrigin().y());
+            const bool would_overshoot = (newVel.y_ > 0.0) ? (targetRelativeY >= 0.0) : (targetRelativeY <= 0.0);
+            if (would_overshoot)
+            {
+                newPhysicsTrans = targetTrans;
+                newVel = Vector3(targetTrans.getOrigin() - _oldTransform.getOrigin())/timeStep;
+                if (_state == State::Departing)
+                    _state = State::DestCooldown;
+                else
+                    _state = State::OriginCooldown;
+                _cooldown = DEST_COOLDOWN;
+            }
+
+            // update the transform that is *used by physics*!
+            ourBody->setOverrideTransform(newPhysicsTrans);
+            // update the rest of the physics state
+            ourBody->Activate();
+            ourBody->SetLinearVelocity(newVel);
+        }
+        else if (_state == State::DestCooldown || _state == State::OriginCooldown)
+        {
+            _cooldown -= timeStep;
+            if (_cooldown <= 0.0)
+            {
+                if (_state == State::DestCooldown)
+                    _state = State::Returning;
+                else
+                    _state = State::Idle;
+            }
+        }
         // std::cout << "Elevator::HandlePhysicsPreStep: pos = " << pos.ToString().c_str() << "; vel = " << vel.ToString().c_str() << std::endl;
         // std::cout << "Elevator::HandlePhysicsPreStep: pos = " << pos.ToString().c_str() << "; newPos = " << newPos.ToString().c_str() << std::endl;
     }
@@ -125,12 +153,18 @@ void Elevator::HandlePhysicsPreStep(Urho3D::StringHash eventType, Urho3D::Varian
 
 void Elevator::HandleNodeCollisionStart(Urho3D::StringHash eventType, Urho3D::VariantMap &eventData)
 {
+    if (_state != State::Idle)
+        return;
     // Node * const otherNode = static_cast<Node*>(eventData[NodeCollisionStart::P_OTHERNODE].GetPtr());
     RigidBody * const otherBody = static_cast<RigidBody*>(eventData[NodeCollisionStart::P_OTHERBODY].GetPtr());
     if (otherBody && otherBody->GetBody()->getUserIndex() == PhysicsUserIndex::Player)
     {
         // std::cout << "TOUCHED ELEVATOR" << std::endl;
-        _elevating = true;
+        _state = State::Departing;
         _accumulator = 0.0;
+        KinematicRigidBody * const ourBody = static_cast<KinematicRigidBody*>(node_->GetComponent<RigidBody>());
+        ourBody->getWorldTransform(_startTrans);
+        _endTrans = _startTrans;
+        _endTrans.setOrigin(_startTrans.getOrigin() + ToBtVector3(Vector3::UP*MAX_ELEVATOR_TRAVEL));
     }
 }

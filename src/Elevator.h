@@ -9,7 +9,6 @@
 namespace Urho3D {
 
 class Node;
-class Vector3;
 class StringHash;
 
 } // namespace Urho3D
@@ -17,6 +16,15 @@ class StringHash;
 class Elevator : public Urho3D::Object
 {
     URHO3D_OBJECT(Elevator, Urho3D::Object);
+public:
+    enum class State
+    {
+        Idle = 0,
+        Departing,
+        DestCooldown,
+        Returning,
+        OriginCooldown
+    };
 public:
     Elevator(Urho3D::Node *node);
     ~Elevator();
@@ -26,7 +34,10 @@ protected:
     void HandleNodeCollisionStart(Urho3D::StringHash eventType, Urho3D::VariantMap &eventData);
 
     Urho3D::Node *node_;
-    bool _elevating;
+    State _state;
     float _accumulator;
+    float _cooldown;
     btTransform _oldTransform;
+    btTransform _startTrans;
+    btTransform _endTrans;
 };

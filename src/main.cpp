@@ -106,6 +106,7 @@ public:
         scene_ = new Scene(context_);
         octree_ = scene_->CreateComponent<Octree>();
         physicsWorld_ = scene_->CreateComponent<PhysicsWorld>();
+        // physicsWorld_->SetNumIterations(20); // default is 10
         // physicsWorld_->SetMaxSubSteps(10); // default is 0 for unlimited
         // physicsWorld_->SetFps(240); // default is 60
         // global Bullet physics callbacks

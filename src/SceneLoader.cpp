@@ -380,7 +380,8 @@ static void processAssimpNode(const aiNode * const ai_node, const aiScene * cons
 
         // create physics body
         RigidBody *body = nullptr;
-        if (strcmp(ai_node->mName.C_Str(), "Elevator") == 0)
+        const bool isElevator = strcmp(ai_node->mName.C_Str(), "Elevator") == 0;
+        if (isElevator)
         {
             // NOTE: we cannot use currentNode->CreateComponent<KinematicRigidBody>()
             // for two reasons: RigidBody is explicitly sought by PhyicsWorld and
@@ -399,8 +400,10 @@ static void processAssimpNode(const aiNode * const ai_node, const aiScene * cons
 
         // create physics shape
         CollisionShape * const shape = currentNode->CreateComponent<CollisionShape>();
-        if (rigidBodyMass == 0.0f)
+        if (rigidBodyMass == 0.0f && !isElevator)
             shape->SetTriangleMesh(model); // for static bodies, we can use non-convex geometry
+        // else if (isElevator)
+            // shape->SetBox(Vector3(2, 2, 2)); // HACK to test if using a primitive shape improved tunneling behavior
         else
             shape->SetConvexHull(model); // for dynamic bodies, the geometry must be convex!
     }
