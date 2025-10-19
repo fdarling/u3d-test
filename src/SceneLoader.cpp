@@ -395,7 +395,7 @@ static void processAssimpNode(const aiNode * const ai_node, const aiScene * cons
 #endif
         }
         else
-            body= currentNode->CreateComponent<RigidBody>();
+            body = currentNode->CreateComponent<RigidBody>();
         body->SetMass(rigidBodyMass); // defaults to 0.0 which means a static body
 
         // create physics shape
@@ -406,6 +406,7 @@ static void processAssimpNode(const aiNode * const ai_node, const aiScene * cons
             // shape->SetBox(Vector3(2, 2, 2)); // HACK to test if using a primitive shape improved tunneling behavior
         else
             shape->SetConvexHull(model); // for dynamic bodies, the geometry must be convex!
+        shape->SetMargin(0.001);
     }
 
     // check for custom game object type

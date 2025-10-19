@@ -134,6 +134,11 @@ void Elevator::HandlePhysicsPreStep(Urho3D::StringHash eventType, Urho3D::Varian
             // update the rest of the physics state
             ourBody->Activate();
             ourBody->SetLinearVelocity(newVel);
+
+            // EVIL HACK to effectively get per-substep kinematic body information into Bullet, rather than per "full step"
+            btRigidBody * const body = ourBody->GetBody();
+            body->getInterpolationWorldTransform() = _oldTransform;
+            body->saveKinematicState(timeStep);
         }
         else if (_state == State::DestCooldown || _state == State::OriginCooldown)
         {

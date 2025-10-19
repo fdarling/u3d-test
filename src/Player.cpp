@@ -57,7 +57,7 @@ Player::Player(Urho3D::Scene *scene, const Urho3D::Vector3 &pos) :
     // create physics body
     RigidBody * const body = node_->CreateComponent<RigidBody>();
     body->SetMass(PLAYER_MASS);
-    body->SetFriction(0.5f);
+    body->SetFriction(0.8f);
     body->SetLinearDamping(0.2f);
     body->SetAngularDamping(0.2f);
     body->SetAngularFactor(Vector3(0, 0, 0)); // prevent tipping over

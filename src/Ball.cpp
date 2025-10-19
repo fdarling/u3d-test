@@ -51,6 +51,7 @@ Ball::Ball(Urho3D::Scene *scene, const Urho3D::Vector3 &pos, const Urho3D::Vecto
     // create physics shape
     CollisionShape * const shape = node_->CreateComponent<CollisionShape>();
     shape->SetSphere(BALL_DIAMETER);
+    shape->SetMargin(0.001);
 }
 
 Ball::~Ball()

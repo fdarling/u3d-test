@@ -6,8 +6,13 @@
 #include <Urho3D/Graphics/Model.h>
 #include <Urho3D/Graphics/VertexBuffer.h>
 #include <Urho3D/Math/Sphere.h>
+#include <Urho3D/Math/MathDefs.h>
 
 #include <cstdint>
+
+#ifdef M_PI
+#undef M_PI
+#endif
 
 using Urho3D::BoundingBox;
 using Urho3D::Context;
